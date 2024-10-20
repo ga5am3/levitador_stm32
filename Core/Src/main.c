@@ -27,6 +27,7 @@
 #include "string.h"
 #include "usbd_cdc_if.h"
 #include "stdlib.h"
+#include "stdint.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -68,14 +69,126 @@ static void MX_TIM3_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+
+#define WORD_LENGHT 13
+#define INTEGER_BITS 2
+#define FRACTIONAL_BITS 11
+
+typedef int32_t fixed_point_t;
+#define FLOAT_TO_FIXED(x) ((fixed_point_t)((x) * (1 << FRACTIONAL_BITS)))
+
+// conversion entre fixed point y int
+fixed_point_t float_to_fixed(float x){
+    return (fixed_point_t)(x * (1 << FRACTIONAL_BITS));
+}
+
+float fixed_to_float(fixed_point_t x){
+    return (float) x/(1<< FRACTIONAL_BITS);
+}
+
+fixed_point_t fixed_multiply(fixed_point_t a, fixed_point_t b) {
+    return (fixed_point_t)(((int64_t)a * b) >> FRACTIONAL_BITS);
+}
+
+void matmul(int rowsA, int colsA, int colsB,
+            const fixed_point_t A[rowsA][colsA],
+            const fixed_point_t B[colsA][colsB],
+            fixed_point_t result[rowsA][colsB]){
+    for (int i = 0; i < rowsA; i++) 
+    {
+        for (int j = 0; j < colsB; j++) 
+        {
+          result[i][j] = 0;
+          for (int k = 0; k < colsA; k++) 
+            {
+            result[i][j]+=fixed_multiply(A[i][k],B[k][j]);
+            }
+        }
+    } 
+}
+
+void vecadd(int size,
+            const fixed_point_t a[size][1], 
+            const fixed_point_t b[size][1], 
+            fixed_point_t result[size][1]) {
+    for (size_t i = 0; i < size; i++) {
+        result[i][0] = a[i][0] + b[i][0];
+    }
+}
+
+void convert_matrix_to_fixed(int rows, int cols, const float matrix_float[rows][cols], fixed_point_t matrix_fixed[rows][cols]) {
+    for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < cols; j++) {
+            matrix_fixed[i][j] = float_to_fixed(matrix_float[i][j]);
+        }
+    }
+}
+
+// Variables Kalman
+fixed_point_t G[3][3] = {
+    {
+        FLOAT_TO_FIXED(0.988195229545670f),
+        FLOAT_TO_FIXED(0.0f),
+        FLOAT_TO_FIXED(0.0f)
+    },
+    {
+        FLOAT_TO_FIXED(-0.000000089317925f),
+        FLOAT_TO_FIXED(1.000000980000160f),
+        FLOAT_TO_FIXED(0.000100000130667f)
+    },
+    {
+        FLOAT_TO_FIXED(-0.001782831162435f),
+        FLOAT_TO_FIXED(0.078400102442707f),
+        FLOAT_TO_FIXED(1.000003920002561f)
+    }
+};
+fixed_point_t x_hat[3][1] = {
+    {FLOAT_TO_FIXED(1.09287f)},
+    {FLOAT_TO_FIXED(0.025f)},
+    {FLOAT_TO_FIXED(0.0f)}
+};
+
+fixed_point_t Cminus[2][3] = {
+    {-1 << FRACTIONAL_BITS, 0, 0},
+    {0, -1 << FRACTIONAL_BITS, 0}
+};
+
+fixed_point_t Kkalman[3][2] = {
+    {FLOAT_TO_FIXED(0.65692f),FLOAT_TO_FIXED(-0.437944f)},
+    {FLOAT_TO_FIXED(-0.34308f),FLOAT_TO_FIXED(0.562056f)},
+    {FLOAT_TO_FIXED(-0.0278381f),FLOAT_TO_FIXED(0.0447253f)}
+};
+// Taking the action into account
+fixed_point_t H_fixed[1][3] = {
+    {
+        FLOAT_TO_FIXED(0.003106f),
+        FLOAT_TO_FIXED(0.0f),
+        FLOAT_TO_FIXED(0.000003f)
+    }
+    // ,{
+    //     FLOAT_TO_FIXED(0.0015578f),
+    //     FLOAT_TO_FIXED(0.0f),
+    //     FLOAT_TO_FIXED(0.0001f)
+    // }
+};
+
+// faking a measurement Y
+fixed_point_t y[2][1] = {
+    {FLOAT_TO_FIXED(1.09287f)},
+    {FLOAT_TO_FIXED(0.025f)}
+};
+
+// Variables de comunicacion
 char buffer[20];
+
+// Variables Fisicas
 int h_prom = 35;
 
 
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
 	h_prom = TIM3->CCR1;
 	HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-
 }
 
 float i_raw;
@@ -84,7 +197,15 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
 	i = HAL_ADC_GetValue(&hadc1)*0.0023157-4.785;
 	h = ((h_prom)*0.0272065-63.235847)*0.001; // valor en mm
 
+  // Implementar el filtro de kalman
+  // MATH
+    // step 1: x_hat = G*x_hat + H*u
+    // step 2: y_hat = C*x_hat
+    // step 3: z_hat = y - y_hat
+    // step 4: x_hat = x_hat + K*z_hat
 
+  // LQR
+    // step 1: u = -K*x
 }
 
 /* USER CODE END 0 */

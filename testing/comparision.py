@@ -62,7 +62,7 @@ def compare_accuracy(G, Cminus, Kkalman, y, x_hat):
         print(f"Mean Squared Error: {mse}")
         # the least sigificant bit in a 32-bit float is 2^-23
 
-
+        
 # Example usage
 if __name__ == "__main__":
     G = np.array([
