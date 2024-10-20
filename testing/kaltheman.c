@@ -1,9 +1,9 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#define WORD_LENGHT 32
-#define INTEGER_BITS 8
-#define FRACTIONAL_BITS 24
+#define WORD_LENGHT 13
+#define INTEGER_BITS 2
+#define FRACTIONAL_BITS 11
 
 typedef int32_t fixed_point_t;
 #define FLOAT_TO_FIXED(x) ((fixed_point_t)((x) * (1 << FRACTIONAL_BITS)))
@@ -16,8 +16,6 @@ fixed_point_t float_to_fixed(float x){
 float fixed_to_float(fixed_point_t x){
     return (float) x/(1<< FRACTIONAL_BITS);
 }
-
-
 
 // suma es igual que con los comunes
 // multiplicacion es diferente
@@ -72,6 +70,47 @@ void convert_matrix_to_fixed(int rows, int cols, const float matrix_float[rows][
         for (int j = 0; j < cols; j++) {
             matrix_fixed[i][j] = float_to_fixed(matrix_float[i][j]);
         }
+    }
+}
+
+void fixed_point_calc(const float G_float[3][3], const float Cminus_float[2][3], const float Kkalman_float[3][2], 
+                      const float y_float[2][1], const float x_hat_float[3][1],
+                      float x_hat_1_out[3][1], float y_hat_negative_out[2][1],
+                      float z_hat_out[2][1], float lz_out[3][1], float x_hat_result_out[3][1]) {
+    
+    fixed_point_t G[3][3], Cminus[2][3], Kkalman[3][2], y[2][1], x_hat[3][1];
+    fixed_point_t x_hat_1[3][1], y_hat_negative[2][1], z_hat[2][1], lz[3][1], x_hat_result[3][1];
+
+    convert_matrix_to_fixed(3, 3, G_float, G);
+    convert_matrix_to_fixed(2, 3, Cminus_float, Cminus);
+    convert_matrix_to_fixed(3, 2, Kkalman_float, Kkalman);
+    convert_matrix_to_fixed(2, 1, y_float, y);
+    convert_matrix_to_fixed(3, 1, x_hat_float, x_hat);
+
+    // Perform calculations
+    matmul(3, 3, 1, G, x_hat, x_hat_1);
+    
+    fixed_point_t y_hat[2][1];
+    matmul(2, 3, 1, Cminus, x_hat_1, y_hat);
+    for (int i = 0; i < 2; i++) {
+        y_hat_negative[i][0] = -y_hat[i][0];
+    }
+    
+    vecadd(2, y, y_hat_negative, z_hat);
+    
+    matmul(3, 2, 1, Kkalman, z_hat, lz);
+    
+    vecadd(3, x_hat_1, lz, x_hat_result);
+
+    // Convert results back to float
+    for (int i = 0; i < 3; i++) {
+        x_hat_1_out[i][0] = fixed_to_float(x_hat_1[i][0]);
+        x_hat_result_out[i][0] = fixed_to_float(x_hat_result[i][0]);
+        if (i < 2) {
+            y_hat_negative_out[i][0] = fixed_to_float(y_hat_negative[i][0]);
+            z_hat_out[i][0] = fixed_to_float(z_hat[i][0]);
+        }
+        lz_out[i][0] = fixed_to_float(lz[i][0]);
     }
 }
 
@@ -151,6 +190,12 @@ int main() {
     matmul(3,2,1, Kkalman, z_hat, lz);
     vecadd(3, x_hat_1, lz, x_hat);
     
+    // MATH
+    // step 1: x_hat = G*x_hat + H*u
+    // step 2: y_hat = C*x_hat
+    // step 3: z_hat = y - y_hat
+    // step 4: x_hat = x_hat + K*z_hat
+
 
     printf("prior:\n");
     print_matrix(3,1, x_hat_1);

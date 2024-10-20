@@ -75,6 +75,7 @@ int h_prom = 35;
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
 	h_prom = TIM3->CCR1;
 	HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+
 }
 
 float i_raw;
