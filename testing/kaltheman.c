@@ -88,16 +88,15 @@ void fixed_point_calc(const float G_float[3][3], const float Cminus_float[2][3],
     convert_matrix_to_fixed(3, 1, x_hat_float, x_hat);
 
     // Perform calculations
+    // step 1: x_hat = G*x_hat + H*u
     matmul(3, 3, 1, G, x_hat, x_hat_1);
-    
-    fixed_point_t y_hat[2][1];
-    matmul(2, 3, 1, Cminus, x_hat_1, y_hat);
-    for (int i = 0; i < 2; i++) {
-        y_hat_negative[i][0] = -y_hat[i][0];
-    }
+    // step 2: y_hat = Cminus*x_hat
+    //fixed_point_t y_hat_negative[2][1];
+    matmul(2, 3, 1, Cminus, x_hat_1, y_hat_negative);
+    // step 3: z_hat = y + y_hat_negative
     
     vecadd(2, y, y_hat_negative, z_hat);
-    
+    // step 4: x_hat = x_hat + K*z_hat
     matmul(3, 2, 1, Kkalman, z_hat, lz);
     
     vecadd(3, x_hat_1, lz, x_hat_result);

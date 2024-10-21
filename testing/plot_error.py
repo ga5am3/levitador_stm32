@@ -29,6 +29,8 @@ ax2.set_title('Mean Squared Error as a Function of Fractional Bits (Log Scale)')
 ax2.set_yscale('log')
 ax2.grid(True)
 
+
 # Show the plot
+plt.savefig('mse_plot.png')
 plt.tight_layout()
 plt.show()

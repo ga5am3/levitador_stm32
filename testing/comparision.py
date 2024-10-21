@@ -39,7 +39,7 @@ def fixed_point_calc(G, Cminus, Kkalman, y, x_hat):
 
 def float_point_calc(G, Cminus, Kkalman, y, x_hat):
     x_hat_1 = G @ x_hat
-    y_hat_negative = -Cminus @ x_hat_1
+    y_hat_negative = Cminus @ x_hat_1
     z_hat = y + y_hat_negative
     lz = Kkalman @ z_hat
     x_hat_result = x_hat_1 + lz
@@ -78,8 +78,8 @@ if __name__ == "__main__":
     ], dtype=np.float32)
 
     Cminus = np.array([
-        [1.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0]
+        [-1.0, 0.0, 0.0],
+        [0.0, -1.0, 0.0]
     ], dtype=np.float32)
 
     Kkalman = np.array([
