@@ -228,16 +228,16 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
   // step 1: u = -K*x
   fixed_point_t Kd[1][3] = {
     {
-      FLOAT_TO_FIXED(0.018029293079868),
-      FLOAT_TO_FIXED(-4.111538385920691),
-      FLOAT_TO_FIXED(-0.146874468496660)
+      FLOAT_TO_FIXED(0.0018029293079868),
+      FLOAT_TO_FIXED(-0.4111538385920691),
+      FLOAT_TO_FIXED(-0.0146874468496660)
     }
   };
-  fixed_point_t precomp = FLOAT_TO_FIXED(-1.662218623972525);
+  fixed_point_t precomp = FLOAT_TO_FIXED(-0.1662218623972525);
   fixed_point_t u[1][1];
   matmul(1, 3, 1, Kd, x_hat_result, u);
   u[0][0] += precomp;
-  float u_float = 1e2 * fixed_to_float(u[0][0]);
+  float u_float = 1e3 * fixed_to_float(u[0][0]);
   // Use x_hat_result_float for further processing
   // convert u to the range of the PWM
   // pulse_length = ((TIM_Period + 1) * DutyCycle)/100 - 1
