@@ -71,9 +71,9 @@ static void MX_TIM3_Init(void);
 /* USER CODE BEGIN 0 */
 
 
-#define WORD_LENGHT 13
+#define WORD_LENGHT 16
 #define INTEGER_BITS 2
-#define FRACTIONAL_BITS 11
+#define FRACTIONAL_BITS 14
 
 typedef int32_t fixed_point_t;
 #define FLOAT_TO_FIXED(x) ((fixed_point_t)((x) * (1 << FRACTIONAL_BITS)))
@@ -182,6 +182,13 @@ fixed_point_t y[2][1] = {
 // Variables de comunicacion
 char buffer[20];
 
+// Variables para llenar en el callback
+fixed_point_t x_hat_1[3][1];
+fixed_point_t y_hat_negative[2][1];
+fixed_point_t z_hat[2][1];
+fixed_point_t lz[3][1];
+fixed_point_t x_hat_result[3][1];
+
 // Variables Fisicas
 int h_prom = 35;
 
@@ -204,10 +211,42 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
     // step 3: z_hat = y - y_hat
     // step 4: x_hat = x_hat + K*z_hat
 
+  // Perform calculations
+  // step 1: x_hat = G*x_hat + H*u
+  matmul(3, 3, 1, G, x_hat, x_hat_1);
+  // step 2: y_hat = Cminus*x_hat
+  //fixed_point_t y_hat_negative[2][1];
+  matmul(2, 3, 1, Cminus, x_hat_1, y_hat_negative);
+  // step 3: z_hat = y + y_hat_negative
+  vecadd(2, y, y_hat_negative, z_hat);
+  // step 4: x_hat = x_hat + K*z_hat
+  matmul(3, 2, 1, Kkalman, z_hat, lz);
+  vecadd(3, x_hat_1, lz, x_hat_result);
   // LQR
-    // step 1: u = -K*x
+  // Kd = [0.018029293079868  -4.111538385920691  -0.146874468496660]
+  // precomp = -1.662218623972525
+  // step 1: u = -K*x
+  fixed_point_t Kd[1][3] = {
+    {
+      FLOAT_TO_FIXED(0.018029293079868),
+      FLOAT_TO_FIXED(-4.111538385920691),
+      FLOAT_TO_FIXED(-0.146874468496660)
+    }
+  };
+  fixed_point_t precomp = FLOAT_TO_FIXED(-1.662218623972525);
+  fixed_point_t u[1][1];
+  matmul(1, 3, 1, Kd, x_hat_result, u);
+  u[0][0] += precomp;
+  float u_float = 1e2 * fixed_to_float(u[0][0]);
+  // Use x_hat_result_float for further processing
+  // convert u to the range of the PWM
+  // pulse_length = ((TIM_Period + 1) * DutyCycle)/100 - 1
+  // DutyCycle = 50% -> pulse_length = (7199 + 1) * 50 / 100 - 1 = 3599
+  // Convert u to the range of the PWM
+  // u = 0 -> pulse_length = 3599
+  // u = 100 -> pulse_length = 7199
+  
 }
-
 /* USER CODE END 0 */
 
 /**
@@ -361,6 +400,11 @@ static void MX_ADC1_Init(void)
 
 /**
   * @brief TIM1 Initialization Function
+
+  RCC_OscInitTypeDe  // u = 0 -> pulse_length = 3599
+                     //   // u = 100 -> pulse_length = 7199
+                     //     
+                     //
   * @param None
   * @retval None
   */
