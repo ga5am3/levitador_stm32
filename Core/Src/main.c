@@ -108,6 +108,18 @@ void matmul(int rowsA, int colsA, int colsB,
     } 
 }
 
+/**
+ * @brief Adds two vectors of fixed-point numbers element-wise.
+ *
+ * This function takes two input vectors `a` and `b`, each of size `size` and 
+ * containing fixed-point numbers, and computes their element-wise sum, storing 
+ * the result in the `result` vector.
+ *
+ * @param size The number of elements in each vector.
+ * @param a The first input vector of fixed-point numbers.
+ * @param b The second input vector of fixed-point numbers.
+ * @param result The output vector where the element-wise sum of `a` and `b` will be stored.
+ */
 void vecadd(int size,
             const fixed_point_t a[size][1], 
             const fixed_point_t b[size][1], 
@@ -193,17 +205,35 @@ fixed_point_t x_hat_result[3][1];
 int h_prom = 35;
 
 
+/// @brief Esta funcion se llama cuando cuando se detecta un flanco asendente en el
+/// pin de señal de sensado de la camara. 
+/// Cuando se ejecuta, se actualiza el valor de h_prom con el valor de la señal, y
+/// se hace un toggle al PIN 13, (???) (que hace el pin 13?)
+/// @param htim 
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
 	h_prom = TIM3->CCR1;
-	HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+  // I don't remember why this is here
+  //	mayor a 2900 lo ignoro, sino actualizo el valor por los pixeles al final del sensor
+  if(i>2900){
+    h_prom = h_prom;
+  }else{
+    h_prom = 2900;
+  }
+	HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13); // What is this for??? A LED?
 }
 
-float i_raw;
+float i;
+float u_float = 5.8;
+float h; // Declare the variable h
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
-//	mayor a 2900 lo ignoro, sino actualizo el valor por los pixeles al final del sensor
+
 	i = HAL_ADC_GetValue(&hadc1)*0.0023157-4.785;
 	h = ((h_prom)*0.0272065-63.235847)*0.001; // valor en mm
 
+  // x_0 = [i; h; 0]
+  x_hat[0][0] = FLOAT_TO_FIXED(i);
+  x_hat[1][0] = FLOAT_TO_FIXED(h);
+  x_hat[2][0] = FLOAT_TO_FIXED(0.0f);
   // Implementar el filtro de kalman
   // MATH
     // step 1: x_hat = G*x_hat + H*u
@@ -213,7 +243,14 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
 
   // Perform calculations
   // step 1: x_hat = G*x_hat + H*u
-  matmul(3, 3, 1, G, x_hat, x_hat_1);
+  fixed_point_t Gx_hat[3][1];
+  fixed_point_t x_hat_1[3][1];
+  matmul(3, 3, 1, G, x_hat, Gx_hat);
+  // H*u = H_fixed * u_float
+  fixed_point_t H_fixed_u[3][1];
+  H_fixed_u[0][0] = fixed_multiply(H_fixed[0][0], FLOAT_TO_FIXED(u_float));
+  H_fixed_u[2][0] = fixed_multiply(H_fixed[0][2], FLOAT_TO_FIXED(u_float));
+  vecadd(3, Gx_hat, H_fixed_u, x_hat_1);
   // step 2: y_hat = Cminus*x_hat
   //fixed_point_t y_hat_negative[2][1];
   matmul(2, 3, 1, Cminus, x_hat_1, y_hat_negative);
@@ -225,7 +262,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
   // LQR
   // Kd = [0.018029293079868  -4.111538385920691  -0.146874468496660]
   // precomp = -1.662218623972525
-  // step 1: u = -K*x
+  // step 1: u = -K*x + precomp * h_ref
   fixed_point_t Kd[1][3] = {
     {
       FLOAT_TO_FIXED(0.0018029293079868),
@@ -233,19 +270,24 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
       FLOAT_TO_FIXED(-0.0146874468496660)
     }
   };
+  fixed_point_t h_ref = FLOAT_TO_FIXED(0.025f);
   fixed_point_t precomp = FLOAT_TO_FIXED(-0.1662218623972525);
   fixed_point_t u[1][1];
   matmul(1, 3, 1, Kd, x_hat_result, u);
-  u[0][0] += precomp;
-  float u_float = 1e3 * fixed_to_float(u[0][0]);
+  u[0][0] = fixed_multiply(precomp, h_ref);
+  u_float = 1e3 * fixed_to_float(u[0][0]);
   // Use x_hat_result_float for further processing
   // convert u to the range of the PWM
-  // pulse_length = ((TIM_Period + 1) * DutyCycle)/100 - 1
-  // DutyCycle = 50% -> pulse_length = (7199 + 1) * 50 / 100 - 1 = 3599
-  // Convert u to the range of the PWM
-  // u = 0 -> pulse_length = 3599
-  // u = 100 -> pulse_length = 7199
-  
+  // Convert u to the range of the PWM, v_max = 12, v_min = 0
+  // ARR = 7199
+  // duty_cycle = CRR/ARR
+  if(u_float < 0){
+    u_float = 0;
+  }else if(u_float > 12){
+    u_float = 12;
+  }
+  TIM1->CCR1 = (uint32_t)(u_float/12) * 7199; // 12 is max voltage, 7199 is ARR
+
 }
 /* USER CODE END 0 */
 
