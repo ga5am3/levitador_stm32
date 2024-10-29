@@ -20,7 +20,6 @@
 #include "main.h"
 #include "usb_device.h"
 
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 // My includes
@@ -214,7 +213,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
 	h_prom = TIM3->CCR1;
   // I don't remember why this is here
   //	mayor a 2900 lo ignoro, sino actualizo el valor por los pixeles al final del sensor
-  if(i>2900){
+  if(h_prom>2900){
     h_prom = h_prom;
   }else{
     h_prom = 2900;
@@ -225,7 +224,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
 float i;
 float u_float = 5.8;
 float h; // Declare the variable h
-void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc){
 
 	i = HAL_ADC_GetValue(&hadc1)*0.0023157-4.785;
 	h = ((h_prom)*0.0272065-63.235847)*0.001; // valor en mm
@@ -275,7 +274,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
   fixed_point_t u[1][1];
   matmul(1, 3, 1, Kd, x_hat_result, u);
   u[0][0] = fixed_multiply(precomp, h_ref);
-  u_float = 1e3 * fixed_to_float(u[0][0]);
+  u_float = - 1e3 * fixed_to_float(u[0][0]);
   // Use x_hat_result_float for further processing
   // convert u to the range of the PWM
   // Convert u to the range of the PWM, v_max = 12, v_min = 0
@@ -289,6 +288,8 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
   TIM1->CCR1 = (uint32_t)(u_float/12) * 7199; // 12 is max voltage, 7199 is ARR
 
 }
+
+float h_hat;
 /* USER CODE END 0 */
 
 /**
@@ -299,7 +300,6 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -336,11 +336,11 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
   while (1)
   {
     /* USER CODE END WHILE */
-	  sprintf(buffer, "%d\n", h_prom);
-	  CDC_Transmit_FS(buffer, strlen(buffer));
+	h_hat = fixed_to_float(x_hat_result[1][0]);
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -442,11 +442,6 @@ static void MX_ADC1_Init(void)
 
 /**
   * @brief TIM1 Initialization Function
-
-  RCC_OscInitTypeDe  // u = 0 -> pulse_length = 3599
-                     //   // u = 100 -> pulse_length = 7199
-                     //     
-                     //
   * @param None
   * @retval None
   */
@@ -581,7 +576,7 @@ static void MX_TIM3_Init(void)
   htim3.Instance = TIM3;
   htim3.Init.Prescaler = 0;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 65535;
+  htim3.Init.Period = 7199;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_IC_Init(&htim3) != HAL_OK)
@@ -592,7 +587,7 @@ static void MX_TIM3_Init(void)
   {
     Error_Handler();
   }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
   {
