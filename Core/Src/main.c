@@ -70,9 +70,9 @@ static void MX_TIM3_Init(void);
 /* USER CODE BEGIN 0 */
 
 
-#define WORD_LENGHT 16
-#define INTEGER_BITS 2
-#define FRACTIONAL_BITS 14
+#define WORD_LENGHT 32
+#define INTEGER_BITS 8
+#define FRACTIONAL_BITS 28
 
 typedef int32_t fixed_point_t;
 #define FLOAT_TO_FIXED(x) ((fixed_point_t)((x) * (1 << FRACTIONAL_BITS)))
