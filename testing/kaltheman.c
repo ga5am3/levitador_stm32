@@ -101,6 +101,7 @@ void fixed_point_calc(const float G_float[3][3], const float Cminus_float[2][3],
     
     vecadd(3, x_hat_1, lz, x_hat_result);
 
+
     // Convert results back to float
     for (int i = 0; i < 3; i++) {
         x_hat_1_out[i][0] = fixed_to_float(x_hat_1[i][0]);
