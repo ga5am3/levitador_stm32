@@ -71,8 +71,8 @@ static void MX_TIM3_Init(void);
 
 
 #define WORD_LENGHT 32
-#define INTEGER_BITS 8
-#define FRACTIONAL_BITS 28
+#define INTEGER_BITS 10
+#define FRACTIONAL_BITS 22
 
 typedef int32_t fixed_point_t;
 #define FLOAT_TO_FIXED(x) ((fixed_point_t)((x) * (1 << FRACTIONAL_BITS)))
@@ -209,16 +209,20 @@ int h_prom = 35;
 /// Cuando se ejecuta, se actualiza el valor de h_prom con el valor de la señal, y
 /// se hace un toggle al PIN 13, (???) (que hace el pin 13?)
 /// @param htim 
+int captura = 0;
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
 	h_prom = TIM3->CCR1;
   // I don't remember why this is here
   //	mayor a 2900 lo ignoro, sino actualizo el valor por los pixeles al final del sensor
-  if(h_prom>2900){
-    h_prom = h_prom;
-  }else{
-    h_prom = 2900;
-  }
-	HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13); // What is this for??? A LED?
+	if (captura==0){
+		if(h_prom>2900){
+		    h_prom = h_prom;
+		  }else{
+		    h_prom = 2900;
+		  }
+			HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13); // What is this for??? A LED?
+		captura = 1;
+	}
 }
 
 float i;
@@ -229,67 +233,76 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc){
 	i = HAL_ADC_GetValue(&hadc1)*0.0023157-4.785;
 	h = ((h_prom)*0.0272065-63.235847)*0.001; // valor en mm
 
-  // x_0 = [i; h; 0]
-  x_hat[0][0] = FLOAT_TO_FIXED(i);
-  x_hat[1][0] = FLOAT_TO_FIXED(h);
-  x_hat[2][0] = FLOAT_TO_FIXED(0.0f);
-  // Implementar el filtro de kalman
-  // MATH
-    // step 1: x_hat = G*x_hat + H*u
-    // step 2: y_hat = C*x_hat
-    // step 3: z_hat = y - y_hat
-    // step 4: x_hat = x_hat + K*z_hat
+	// x_0 = [i; h; 0]
+	x_hat[0][0] = FLOAT_TO_FIXED(i);
+	x_hat[1][0] = FLOAT_TO_FIXED(h);
+	x_hat[2][0] = FLOAT_TO_FIXED(0.0f);
+	// Implementar el filtro de kalman
+	// MATH
+	// step 1: x_hat = G*x_hat + H*u
+	// step 2: y_hat = C*x_hat
+	// step 3: z_hat = y - y_hat
+	// step 4: x_hat = x_hat + K*z_hat
 
-  // Perform calculations
-  // step 1: x_hat = G*x_hat + H*u
-  fixed_point_t Gx_hat[3][1];
-  fixed_point_t x_hat_1[3][1];
-  matmul(3, 3, 1, G, x_hat, Gx_hat);
-  // H*u = H_fixed * u_float
-  fixed_point_t H_fixed_u[3][1];
-  H_fixed_u[0][0] = fixed_multiply(H_fixed[0][0], FLOAT_TO_FIXED(u_float));
-  H_fixed_u[2][0] = fixed_multiply(H_fixed[0][2], FLOAT_TO_FIXED(u_float));
-  vecadd(3, Gx_hat, H_fixed_u, x_hat_1);
-  // step 2: y_hat = Cminus*x_hat
-  //fixed_point_t y_hat_negative[2][1];
-  matmul(2, 3, 1, Cminus, x_hat_1, y_hat_negative);
-  // step 3: z_hat = y + y_hat_negative
-  vecadd(2, y, y_hat_negative, z_hat);
-  // step 4: x_hat = x_hat + K*z_hat
-  matmul(3, 2, 1, Kkalman, z_hat, lz);
-  vecadd(3, x_hat_1, lz, x_hat_result);
-  // LQR
-  // Kd = [0.018029293079868  -4.111538385920691  -0.146874468496660]
-  // precomp = -1.662218623972525
-  // step 1: u = -K*x + precomp * h_ref
-  fixed_point_t Kd[1][3] = {
-    {
-      FLOAT_TO_FIXED(0.0018029293079868),
-      FLOAT_TO_FIXED(-0.4111538385920691),
-      FLOAT_TO_FIXED(-0.0146874468496660)
-    }
-  };
-  fixed_point_t h_ref = FLOAT_TO_FIXED(0.025f);
-  fixed_point_t precomp = FLOAT_TO_FIXED(-0.1662218623972525);
-  fixed_point_t u[1][1];
-  matmul(1, 3, 1, Kd, x_hat_result, u);
-  u[0][0] = fixed_multiply(precomp, h_ref);
-  u_float = - 1e3 * fixed_to_float(u[0][0]);
-  // Use x_hat_result_float for further processing
-  // convert u to the range of the PWM
-  // Convert u to the range of the PWM, v_max = 12, v_min = 0
-  // ARR = 7199
-  // duty_cycle = CRR/ARR
-  if(u_float < 0){
-    u_float = 0;
-  }else if(u_float > 12){
-    u_float = 12;
-  }
-  TIM1->CCR1 = (uint32_t)(u_float/12) * 7199; // 12 is max voltage, 7199 is ARR
-
-}
+	// Perform calculations
+	// step 1: x_hat = G*x_hat + H*u
+	fixed_point_t Gx_hat[3][1];
+	fixed_point_t x_hat_1[3][1];
+	matmul(3, 3, 1, G, x_hat, Gx_hat);
+	// H*u = H_fixed * u_float
+	fixed_point_t H_fixed_u[3][1];
+	H_fixed_u[0][0] = fixed_multiply(H_fixed[0][0], FLOAT_TO_FIXED(u_float));
+	H_fixed_u[2][0] = fixed_multiply(H_fixed[0][2], FLOAT_TO_FIXED(u_float));
+	vecadd(3, Gx_hat, H_fixed_u, x_hat_1);
+	// step 2: y_hat = Cminus*x_hat
+	//fixed_point_t y_hat_negative[2][1];
+	matmul(2, 3, 1, Cminus, x_hat_1, y_hat_negative);
+	// step 3: z_hat = y + y_hat_negative
+	vecadd(2, y, y_hat_negative, z_hat);
+	// step 4: x_hat = x_hat + K*z_hat
+	matmul(3, 2, 1, Kkalman, z_hat, lz);
+	vecadd(3, x_hat_1, lz, x_hat_result);
+	// Save x_hat_result back to x_hat
+	for (int i = 0; i < 3; i++) {
+		x_hat[i][0] = x_hat_result[i][0];
+	}
+	// LQR
+	// Kd = [0.018029293079868  -4.111538385920691  -0.146874468496660]
+	// precomp = -1.662218623972525
+	// step 1: u = -K*x + precomp * h_ref
+	fixed_point_t Kd[1][3] = {
+	{
+	  FLOAT_TO_FIXED(0.0018029293079868),
+	  FLOAT_TO_FIXED(-0.4111538385920691),
+	  FLOAT_TO_FIXED(-0.0146874468496660)
+	}
+	};
+	fixed_point_t h_ref = FLOAT_TO_FIXED(0.025f);
+	fixed_point_t precomp = FLOAT_TO_FIXED(-0.1662218623972525);
+	fixed_point_t u[1][1];
+	matmul(1, 3, 1, Kd, x_hat_result, u);
+	u[0][0] = fixed_multiply(precomp, h_ref);
+	u_float = - 1e3 * fixed_to_float(u[0][0]);
+	// Use x_hat_result_float for further processing
+	// convert u to the range of the PWM
+	// Convert u to the range of the PWM, v_max = 12, v_min = 0
+	// ARR = 7199
+	// duty_cycle = CRR/ARR
+	if(u_float < 0){
+		u_float = 0;
+	}else if(u_float > 12){
+		u_float = 12;
+	}
+		TIM1->CCR1 = (uint32_t)(u_float/12) * 7199; // 12 is max voltage, 7199 is ARR
+		captura = 0;
+	}
 
 float h_hat;
+
+
+static int direction = 1;
+static int value = 0;
+int value2 = 100;
 /* USER CODE END 0 */
 
 /**
@@ -336,11 +349,31 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  char data[35];
 
   while (1)
   {
     /* USER CODE END WHILE */
-	h_hat = fixed_to_float(x_hat_result[1][0]);
+    h_hat = fixed_to_float(x_hat_result[1][0]);
+    //	sprintf(data, "%d %d %d",h_prom, (int)(10000*h), (int)(10000*h_hat)); // Test position and kalman
+    //	CDC_Transmit_FS(data,strlen(data));
+    //	HAL_Delay(100);
+    // sprintf(data, "%d\n", h_prom);
+    value += direction;
+    value2 -= direction;
+    if (value > 100) {
+        value = 100;  // Constrain to max value
+        direction = -1;  // Change direction
+    } else if (value < 0) {
+        value = 0;  // Constrain to min value
+        direction = 1;  // Change direction
+    }
+
+    HAL_Delay(100);
+    sprintf(data, "%d\n", value);
+    
+    CDC_Transmit_FS(data, strlen(data));
+    
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */

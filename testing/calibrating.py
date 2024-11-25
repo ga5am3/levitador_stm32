@@ -12,6 +12,7 @@ import serial.tools.list_ports as list_ports
 import time
 import matplotlib.style as plot_style
 import scienceplots
+import matplotlib.pyplot as plt
 
 class SerialHandler:
     def __init__(self):
@@ -27,8 +28,10 @@ class SerialHandler:
 
     def read_serial(self):
         if self.serial_port and self.serial_port.in_waiting:
-            return int(self.serial_port.readline().decode('utf-8').strip())
-        return None
+            data = self.serial_port.readline().decode('utf-8').strip()
+            h_prom, h, h_hat = map(int, data.split())
+            return h_prom, h / 10000.0, h_hat / 10000.0
+        return None, None, None
 
 class CalibrationHandler:
     def __init__(self):
@@ -102,13 +105,37 @@ class CalibrationApp:
         self.calibration_handler.calculate_best_fit()
 
     def update_calibrated_value(self):
-        measured_value = self.serial_handler.read_serial()
-        if measured_value is not None:
-            calibrated_value = self.calibration_handler.calibrate(measured_value)
+        h_prom, h, h_hat = self.serial_handler.read_serial()
+        if h is not None:
+            calibrated_value = self.calibration_handler.calibrate(h)
             self.label_calibrated_value.config(text=f"{calibrated_value:.2f}")
         self.root.after(1000, self.update_calibrated_value)
 
+def plot_signals():
+    serial_handler = SerialHandler()
+    fig, ax = plt.subplots()
+    h_prom_data, h_data, h_hat_data = [], [], []
+
+    def update(frame):
+        h_prom, h, h_hat = serial_handler.read_serial()
+        if h_prom is not None:
+            h_prom_data.append(h_prom)
+            h_data.append(h)
+            h_hat_data.append(h_hat)
+            ax.clear()
+            ax.plot(h_prom_data, label='h_prom')
+            ax.plot(h_data, label='h')
+            ax.plot(h_hat_data, label='h_hat')
+            ax.legend()
+            ax.set_xlabel('Time')
+            ax.set_ylabel('Values')
+            ax.set_title('Real-time Sensor Data')
+
+    ani = animation.FuncAnimation(fig, update, interval=1000)
+    plt.show()
+
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = CalibrationApp(root)
-    root.mainloop()
+    #root = tk.Tk()
+    #app = CalibrationApp(root)
+    #root.mainloop()
+    plot_signals()
