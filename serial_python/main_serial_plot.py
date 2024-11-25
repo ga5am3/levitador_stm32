@@ -31,13 +31,13 @@ class SerialPlotApp:
         # Write reference value to serial port
         self.serial_handler.write_data(value)
         
-        # Read new data from serial port
-        new_y = self.serial_handler.read_data()
-        if new_y is not None:
-            print(f"New data: {new_y}") 
-            return self.plotter.update(new_y, value)
+        # Read list from serial port
+        y_values = self.serial_handler.read_data()
+        if y_values:
+            print(f"New data: {y_values}")
+            return self.plotter.update(y_values, value)
 
-        return self.plotter.line1, self.plotter.line2
+        return self.plotter.line1, self.plotter.line2, self.plotter.line3
         
     def run(self):
         """Start the application."""

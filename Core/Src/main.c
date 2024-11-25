@@ -370,7 +370,7 @@ int main(void)
     }
 
     HAL_Delay(100);
-    sprintf(data, "%d\n", value);
+    sprintf(data, "%d|%d\n", value, value2);
     
     CDC_Transmit_FS(data, strlen(data));
     
