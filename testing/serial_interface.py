@@ -12,6 +12,7 @@ import serial.tools.list_ports as list_ports
 import time
 import matplotlib.style as plot_style
 import scienceplots
+import csv
 
 class SerialHandler:
     def __init__(self):
@@ -148,13 +149,13 @@ class PlotGUI:
 
         # Create a button to export data
         update_button = ttk.Button(controls_frame, text="Export", 
-                                   command=lambda: self.update_plots(self.reference_value.get()), 
-                                   style='primary.Outline.TButton')
+                       command=lambda: self.export_data(), 
+                       style='primary.Outline.TButton')
         update_button.grid(row=0, column=4, rowspan=3, padx=5, pady=10)
 
         # Create a button to connect to the serial port
         connect_button = ttk.Button(controls_frame, text="Connect", command=self.serial_handler.connect,
-                                    style='primary.Outline.TButton')
+                        style='primary.Outline.TButton')
         connect_button.grid(row=0, column=5, rowspan=3, padx=5, pady=10)
 
         controls_frame.grid_columnconfigure(0, weight=1)  # Add weight to the left column
@@ -162,12 +163,20 @@ class PlotGUI:
 
     def update_limits(self, value):
         '''TODO: add a way to modify the limits from the screen'''
+
         pass
         self.ax.set_ylim()
 
     def export_data(self):
-        '''TODO: '''
-        pass
+        '''TODO: implement data export'''
+        # For example, export x_data and y_data to a CSV file
+        print("Exporting data...")
+        with open('plot_data.csv', 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(['X', 'Y'])
+            for x, y in zip(self.x_data, self.y_data):
+              writer.writerow([x, y])
+        print("Data exported to plot_data.csv")
 
     def update_plots(self, frame, value):
         value_to_send: int = self.reference_value.get()*1000
@@ -195,13 +204,30 @@ class PlotGUI:
                 self.line3.set_marker('v')
             else:
                 self.line3.set_marker('^')
-            line3_x = [new_x, new_x]
-            line3_y = [self.y_data[-1], self.y_data[-1]-0.3*(self.y_data[-1]-value)] # change second item to be proportional to the difference between u and u_eq
-            self.line3.set_data(line3_x, line3_y)
-            # Adjust the x-axis limits to show only the last 50 data points
-            self.ax.set_xlim(new_x - 15, new_x + 0.5)
+                line3_x = [new_x, new_x]
+                line3_y = [self.y_data[-1], self.y_data[-1]-0.3*(self.y_data[-1]-value)] # change second item to be proportional to the difference between u and u_eq
+                self.line3.set_data(line3_x, line3_y)
+                # Adjust the x-axis limits to show only the last 50 data points
+                self.ax.set_xlim(new_x - 15, new_x + 0.5)
 
         return self.line1, self.line2, self.line3
+        #     y2 = np.ones(2) * self.reference_value.get()
+
+        #     # Update the plot data
+        #     self.line1.set_data(self.x_data, self.y_data)
+        #     self.line2.set_ydata(y2)
+
+        #     if (self.y_data[-1]-value) > 0:
+        #         self.line3.set_marker('v')
+        #     else:
+        #         self.line3.set_marker('^')
+        #     line3_x = [new_x, new_x]
+        #     line3_y = [self.y_data[-1], self.y_data[-1]-0.3*(self.y_data[-1]-value)] # change second item to be proportional to the difference between u and u_eq
+        #     self.line3.set_data(line3_x, line3_y)
+        #     # Adjust the x-axis limits to show only the last 50 data points
+        #     self.ax.set_xlim(new_x - 15, new_x + 0.5)
+
+        # return self.line1, self.line2, self.line3
 
     def run(self):
         self.root.mainloop()

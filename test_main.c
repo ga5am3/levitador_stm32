@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include "stdint.h"
+#include "math.h"
 
 #define WORD_LENGHT 18
 #define INTEGER_BITS 4
@@ -121,46 +122,155 @@ void test_HAL_ADC_ConvCpltCallback() {
   printf("x_hat_result: [%f, %f, %f]\n", fixed_to_float(x_hat_result[0][0]), fixed_to_float(x_hat_result[1][0]), fixed_to_float(x_hat_result[2][0]));
 }
 
-int main() {
-  // Initialize matrices with mock values
-  G[0][0] = FLOAT_TO_FIXED(0.988195229545670f);
-  G[1][1] = FLOAT_TO_FIXED(1.000000980000160f);
-  G[2][2] = FLOAT_TO_FIXED(1.000003920002561f);
-  Cminus[0][0] = -1 << FRACTIONAL_BITS;
-  Cminus[1][1] = -1 << FRACTIONAL_BITS;
-  Kkalman[0][0] = FLOAT_TO_FIXED(0.65692f);
-  Kkalman[1][1] = FLOAT_TO_FIXED(0.562056f);
-  H_fixed[0][0] = FLOAT_TO_FIXED(0.003106f);
-  H_fixed[0][2] = FLOAT_TO_FIXED(0.000003f);
-  y[0][0] = FLOAT_TO_FIXED(1.09287f);
-  y[1][0] = FLOAT_TO_FIXED(0.025f);
+// int main() {
+//   // Initialize matrices with mock values
+//   G[0][0] = FLOAT_TO_FIXED(0.988195229545670f);
+//   G[1][1] = FLOAT_TO_FIXED(1.000000980000160f);
+//   G[2][2] = FLOAT_TO_FIXED(1.000003920002561f);
+//   Cminus[0][0] = -1 << FRACTIONAL_BITS;
+//   Cminus[1][1] = -1 << FRACTIONAL_BITS;
+//   Kkalman[0][0] = FLOAT_TO_FIXED(0.65692f);
+//   Kkalman[1][1] = FLOAT_TO_FIXED(0.562056f);
+//   H_fixed[0][0] = FLOAT_TO_FIXED(0.003106f);
+//   H_fixed[0][2] = FLOAT_TO_FIXED(0.000003f);
+//   y[0][0] = FLOAT_TO_FIXED(1.09287f);
+//   y[1][0] = FLOAT_TO_FIXED(0.025f);
 
-  // Run the test
-  test_HAL_ADC_ConvCpltCallback();
+//   // Run the test
+//   test_HAL_ADC_ConvCpltCallback();
 
-  fixed_point_t Kd[1][3] = {
-    {
-      FLOAT_TO_FIXED(0.0018029293079868),
-      FLOAT_TO_FIXED(-0.4111538385920691),
-      FLOAT_TO_FIXED(-0.0146874468496660)
-    }
+//   fixed_point_t Kd[1][3] = {
+//     {
+//       FLOAT_TO_FIXED(0.0018029293079868),
+//       FLOAT_TO_FIXED(-0.4111538385920691),
+//       FLOAT_TO_FIXED(-0.0146874468496660)
+//     }
+//   };
+//   fixed_point_t h_ref = FLOAT_TO_FIXED(0.025f);
+//   fixed_point_t precomp = FLOAT_TO_FIXED(-0.1662218623972525);
+//   fixed_point_t u[1][1];
+//   matmul(1, 3, 1, Kd, x_hat_result, u);
+//   u[0][0] = fixed_multiply(precomp, h_ref);
+//   u_float = 1e3 * fixed_to_float(u[0][0]);
+//   printf("u_float: %f\n", u_float);
+//   // Convert u to the range of the PWM, v_max = 12, v_min = 0
+//   // ARR = 7199, duty_cycle = CRR/ARR
+//   if (u_float < 0) {
+//     u_float = 0;
+//   } else if (u_float > 12) {
+//     u_float = 12;
+//   }
+
+//   printf("u_float: %f\n", u_float);
+
+//   return 0;
+// }// test_main.c
+void test_matmul() {
+  // Define test matrices
+  float A_float[2][2] = {
+    {1.5, -2.3},
+    {3.1, 0.7}
   };
-  fixed_point_t h_ref = FLOAT_TO_FIXED(0.025f);
-  fixed_point_t precomp = FLOAT_TO_FIXED(-0.1662218623972525);
-  fixed_point_t u[1][1];
-  matmul(1, 3, 1, Kd, x_hat_result, u);
-  u[0][0] = fixed_multiply(precomp, h_ref);
-  u_float = 1e3 * fixed_to_float(u[0][0]);
-  printf("u_float: %f\n", u_float);
-  // Convert u to the range of the PWM, v_max = 12, v_min = 0
-  // ARR = 7199, duty_cycle = CRR/ARR
-  if (u_float < 0) {
-    u_float = 0;
-  } else if (u_float > 12) {
-    u_float = 12;
+  float B_float[2][2] = {
+    {0.5, 1.2},
+    {-1.1, 2.3}
+  };
+  float expected_result_float[2][2] = {
+    {-2.08, 7.41},
+    {1.28, 5.69}
+  };
+
+  // Convert matrices to fixed-point
+  fixed_point_t A_fixed[2][2];
+  fixed_point_t B_fixed[2][2];
+  fixed_point_t result_fixed[2][2];
+  convert_matrix_to_fixed(2, 2, A_float, A_fixed);
+  convert_matrix_to_fixed(2, 2, B_float, B_fixed);
+
+  // Perform matrix multiplication
+  matmul(2, 2, 2, A_fixed, B_fixed, result_fixed);
+
+  // Convert result back to float
+  float result_float[2][2];
+  for (int i = 0; i < 2; i++) {
+    for (int j = 0; j < 2; j++) {
+      result_float[i][j] = fixed_to_float(result_fixed[i][j]);
+    }
   }
 
-  printf("u_float: %f\n", u_float);
+  // Check if the result matches the expected result
+  for (int i = 0; i < 2; i++) {
+    for (int j = 0; j < 2; j++) {
+      if (fabs(result_float[i][j] - expected_result_float[i][j]) > 0.01) {
+        printf("Test failed: element [%d][%d] is %f, expected %f\n", i, j, result_float[i][j], expected_result_float[i][j]);
+        return;
+      }
+    }
+  }
+  printf("Test passed: matrix multiplication is correct\n");
+}
 
+// int main() {
+//   // Run the test
+//   test_matmul();
+//   return 0;
+// }
+
+// int main() {
+//   // Run the test
+//   test_matmul_existing();
+//   return 0;
+// }
+void test_matmul_existing() {
+  // Use existing matrices G and Kkalman for testing
+  float G_float[3][3] = {
+    {0.988195229545670f, 0.0f, 0.0f},
+    {0.0f, 1.000000980000160f, 0.0f},
+    {0.0f, 0.0f, 1.000003920002561f}
+  };
+  float Kkalman_float[3][2] = {
+    {0.65692f, 0.0f},
+    {0.0f, 0.562056f},
+    {0.0f, 0.0f}
+  };
+  float expected_result_float[3][2] = {
+    {0.648872f, 0.0f},
+    {0.0f, 0.562056f},
+    {0.0f, 0.0f}
+  };
+
+  // Convert matrices to fixed-point
+  fixed_point_t G_fixed[3][3];
+  fixed_point_t Kkalman_fixed[3][2];
+  fixed_point_t result_fixed[3][2];
+  convert_matrix_to_fixed(3, 3, G_float, G_fixed);
+  convert_matrix_to_fixed(3, 2, Kkalman_float, Kkalman_fixed);
+
+  // Perform matrix multiplication
+  matmul(3, 3, 2, G_fixed, Kkalman_fixed, result_fixed);
+
+  // Convert result back to float
+  float result_float[3][2];
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 2; j++) {
+      result_float[i][j] = fixed_to_float(result_fixed[i][j]);
+    }
+  }
+
+  // Check if the result matches the expected result
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 2; j++) {
+      if (fabs(result_float[i][j] - expected_result_float[i][j]) > 0.01) {
+        printf("Test failed: element [%d][%d] is %f, expected %f\n", i, j, result_float[i][j], expected_result_float[i][j]);
+        return;
+      }
+    }
+  }
+  printf("Test passed: matrix multiplication is correct\n");
+}
+
+int main() {
+  // Run the test
+  test_matmul_existing();
   return 0;
-}// test_main.c
+}
