@@ -253,7 +253,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc){
 	fixed_point_t H_fixed_u[3][1];
 	H_fixed_u[0][0] = fixed_multiply(H_fixed[0][0], FLOAT_TO_FIXED(u_float));
 	H_fixed_u[2][0] = fixed_multiply(H_fixed[0][2], FLOAT_TO_FIXED(u_float));
-
+  //x_hat_1 = G x + H u
 	vecadd(3, Gx_hat, H_fixed_u, x_hat_1);
 	// step 2: y_hat = Cminus*x_hat
 	//fixed_point_t y_hat_negative[2][1];
@@ -357,8 +357,8 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-    // h_hat = fixed_to_float(x_hat_result[1][0]);
-    // //	sprintf(data, "%d %d %d",h_prom, (int)(10000*h), (int)(10000*h_hat)); // Test position and kalman
+    h_hat = fixed_to_float(x_hat_result[1][0]);
+//    sprintf(data, "%d %d %d",h_prom, (int)(10000*h), (int)(10000*h_hat)); // Test position and kalman
     //	CDC_Transmit_FS(data,strlen(data));
     //	HAL_Delay(100);
     // sprintf(data, "%d\n", h_prom);
