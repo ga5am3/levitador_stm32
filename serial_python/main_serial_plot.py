@@ -29,7 +29,7 @@ class SerialPlotApp:
     def update_plots(self, frame, value=None):
         """Update plot with new data from serial port."""
         value = self.gui.reference_value.get()
-        print(f"Reference value: {value}")
+        # print(f"Reference value: {value}")
         # Write reference value to serial port
         self.serial_handler.write_data(value)
         
@@ -38,6 +38,8 @@ class SerialPlotApp:
         if y_values:
             print(f"New data: {y_values}")
             return self.plotter.update(y_values, value)
+        else: 
+            print("No data received")
 
         return self.plotter.line1, self.plotter.line2, self.plotter.line3
     

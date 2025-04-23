@@ -387,7 +387,6 @@ int main(void)
     sprintf(data, "%d|%d\n", value, value2);
 
     CDC_Transmit_FS(data, strlen(data));
-
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
