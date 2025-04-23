@@ -24,22 +24,45 @@ float fixed_to_float(fixed_point_t x){
 //}
 
 fixed_point_t fixed_multiply(fixed_point_t a, fixed_point_t b) {
-    return (fixed_point_t)(((int64_t)a * b) >> FRACTIONAL_BITS);
+    int64_t result = ((int64_t)a * b);
+    // Add rounding before shifting
+    result = (result + (1 << (FRACTIONAL_BITS - 1))) >> FRACTIONAL_BITS;
+    return (fixed_point_t)result;
+    // return (fixed_point_t)(((int64_t)a * b) >> FRACTIONAL_BITS);
 }
 
+
+/**
+ * @brief Computes the matrix multiplication of two matrices.
+ *
+ * This function multiplies matrix A (of dimensions rowsA x colsA) with matrix B
+ * (of dimensions colsA x colsB) using fixed-point arithmetic. The result is stored
+ * in the provided result matrix (of dimensions rowsA x colsB).
+ *
+ * For each element in the result matrix, the function computes the dot product of
+ * the corresponding row from matrix A and the column from matrix B, using a
+ * fixed-point multiplication for each pair of elements.
+ *
+ * @param rowsA The number of rows in matrix A and the result matrix.
+ * @param colsA The number of columns in matrix A and the number of rows in matrix B.
+ * @param colsB The number of columns in matrix B and the result matrix.
+ * @param A The first input matrix with dimensions [rowsA][colsA].
+ * @param B The second input matrix with dimensions [colsA][colsB].
+ * @param result The output matrix to store the multiplication result. It must be
+ *               preallocated with dimensions [rowsA][colsB].
+ */
 void matmul(int rowsA, int colsA, int colsB,
             const fixed_point_t A[rowsA][colsA],
             const fixed_point_t B[colsA][colsB],
             fixed_point_t result[rowsA][colsB]){
-    for (int i = 0; i < rowsA; i++) 
-    {
-        for (int j = 0; j < colsB; j++) 
-        {
-          result[i][j] = 0;
-          for (int k = 0; k < colsA; k++) 
-            {
-            result[i][j]+=fixed_multiply(A[i][k],B[k][j]);
+    for (int i = 0; i < rowsA; i++) {
+        for (int j = 0; j < colsB; j++) {
+            int64_t sum = 0;  // Use higher precision for accumulation
+            for (int k = 0; k < colsA; k++) {
+                sum += ((int64_t)A[i][k] * B[k][j]);
             }
+            // Apply scaling with proper rounding
+            result[i][j] = (fixed_point_t)((sum + (1 << (FRACTIONAL_BITS - 1))) >> FRACTIONAL_BITS);
         }
     } 
 }
@@ -48,7 +71,7 @@ void vecadd(int size,
             const fixed_point_t a[size][1], 
             const fixed_point_t b[size][1], 
             fixed_point_t result[size][1]) {
-    for (size_t i = 0; i < size; i++) {
+    for (int i = 0; i < size; i++) {
         result[i][0] = a[i][0] + b[i][0];
     }
 }
@@ -93,8 +116,7 @@ void fixed_point_calc(const float G_float[3][3], const float Cminus_float[2][3],
     // step 2: y_hat = Cminus*x_hat
     //fixed_point_t y_hat_negative[2][1];
     matmul(2, 3, 1, Cminus, x_hat_1, y_hat_negative);
-    // step 3: z_hat = y + y_hat_negative
-    
+    // step 3: z_hat = y - y_hat
     vecadd(2, y, y_hat_negative, z_hat);
     // step 4: x_hat = x_hat + K*z_hat
     matmul(3, 2, 1, Kkalman, z_hat, lz);
@@ -139,8 +161,8 @@ fixed_point_t x_hat[3][1] = {
 };
 
 fixed_point_t Cminus[2][3] = {
-    {-1 << FRACTIONAL_BITS, 0, 0},
-    {0, -1 << FRACTIONAL_BITS, 0}
+    {FLOAT_TO_FIXED(-1.0), 0, 0},
+    {0, FLOAT_TO_FIXED(-1.0), 0}
 };
 
 fixed_point_t Kkalman[3][2] = {
@@ -168,63 +190,63 @@ fixed_point_t y[2][1] = {
     {FLOAT_TO_FIXED(0.025f)}
 };
 
-int main() {    
-    printf("Matrix G:\n");
-    print_matrix(3, 3, G);
+// int main() {    
+//     printf("Matrix G:\n");
+//     print_matrix(3, 3, G);
 
-    printf("Matrix x:\n");
-    print_matrix(3, 1, x_hat);
+//     printf("Matrix x:\n");
+//     print_matrix(3, 1, x_hat);
 
-    // MATH 
-    // x_hat = G*x_hat 
-    // still needs to include the + H*u
-    fixed_point_t x_hat_1[3][1];
-    matmul(3,3,1, G, x_hat, x_hat_1);
-    // z_hat = y - C*x
-    fixed_point_t y_hat[2][1];
-    matmul(2,3,1, Cminus, x_hat_1, y_hat);
-    fixed_point_t z_hat[2][1];
-    vecadd(2, y, y_hat, z_hat); // y comes from the measurement
-    // x_hat = x_hat + K*z_hat;
-    fixed_point_t lz[3][1];
-    matmul(3,2,1, Kkalman, z_hat, lz);
-    vecadd(3, x_hat_1, lz, x_hat);
+//     // MATH 
+//     // x_hat = G*x_hat 
+//     // still needs to include the + H*u
+//     fixed_point_t x_hat_1[3][1];
+//     matmul(3,3,1, G, x_hat, x_hat_1);
+//     // z_hat = y - C*x
+//     fixed_point_t y_hat[2][1];
+//     matmul(2,3,1, Cminus, x_hat_1, y_hat);
+//     fixed_point_t z_hat[2][1];
+//     vecadd(2, y, y_hat, z_hat); // y comes from the measurement
+//     // x_hat = x_hat + K*z_hat;
+//     fixed_point_t lz[3][1];
+//     matmul(3,2,1, Kkalman, z_hat, lz);
+//     vecadd(3, x_hat_1, lz, x_hat);
     
-    // MATH
-    // step 1: x_hat = G*x_hat + H*u
-    // step 2: y_hat = C*x_hat
-    // step 3: z_hat = y - y_hat
-    // step 4: x_hat = x_hat + K*z_hat
+//     // MATH
+//     // step 1: x_hat = G*x_hat + H*u
+//     // step 2: y_hat = C*x_hat
+//     // step 3: z_hat = y - y_hat
+//     // step 4: x_hat = x_hat + K*z_hat
 
 
-    printf("prior:\n");
-    print_matrix(3,1, x_hat_1);
-    // Should output
-    // 3-element Vector{Float64}:
-    // 1.0799689205135763
-    // 0.025000000387183332
-    // 1.1599868577336732e-5
-    printf("Cmat:\n");
-    print_matrix(2,3, Cminus);    
-    printf("y_hat:\n");
-    print_matrix(2,1, y_hat);
+//     printf("prior:\n");
+//     print_matrix(3,1, x_hat_1);
+//     // Should output
+//     // 3-element Vector{Float64}:
+//     // 1.0799689205135763
+//     // 0.025000000387183332
+//     // 1.1599868577336732e-5
+//     printf("Cmat:\n");
+//     print_matrix(2,3, Cminus);    
+//     printf("y_hat:\n");
+//     print_matrix(2,1, y_hat);
     
 
-    printf("z_hat:\n");
-    print_matrix(2,1, z_hat);
-    // Should output
-    // 2-element Vector{Float64}:
-    // 0.012901079486423717
-    // -3.871833305357786e-10
-    printf("lz:\n");
-    print_matrix(3,1,lz);
+//     printf("z_hat:\n");
+//     print_matrix(2,1, z_hat);
+//     // Should output
+//     // 2-element Vector{Float64}:
+//     // 0.012901079486423717
+//     // -3.871833305357786e-10
+//     printf("lz:\n");
+//     print_matrix(3,1,lz);
     
-    printf("Result:\n");
-    print_matrix(3, 1, x_hat);
-    // Should Output
-    // 3-element Vector{Float64}:
-    // 1.0884438978193625
-    // 0.02057389781936237
-    //-0.00034754168959056595
-    return 0;
-}
+//     printf("Result:\n");
+//     print_matrix(3, 1, x_hat);
+//     // Should Output
+//     // 3-element Vector{Float64}:
+//     // 1.0884438978193625
+//     // 0.02057389781936237
+//     //-0.00034754168959056595
+//     return 0;
+// }

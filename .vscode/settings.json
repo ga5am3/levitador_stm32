@@ -5,5 +5,8 @@
         "activityBar.background": "#1A330C",
         "titleBar.activeBackground": "#244811",
         "titleBar.activeForeground": "#F6FCF2"
+    },
+    "files.associations": {
+        "string.h": "c"
     }
 }

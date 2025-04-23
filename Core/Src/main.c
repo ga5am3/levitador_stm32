@@ -225,6 +225,17 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
 	}
 }
 
+fixed_point_t Kd[1][3] = {
+  {
+    FLOAT_TO_FIXED(0.0018029293079868),
+    FLOAT_TO_FIXED(-0.4111538385920691),
+    FLOAT_TO_FIXED(-0.0146874468496660)
+  }
+};
+fixed_point_t h_ref = FLOAT_TO_FIXED(0.025f);
+fixed_point_t precomp = FLOAT_TO_FIXED(-0.1662218623972525);
+fixed_point_t u[1][1];
+
 float i;
 float u_float = 5.8;
 float h; // Declare the variable h
@@ -234,9 +245,14 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc){
 	h = ((h_prom)*0.0272065-63.235847)*0.001; // valor en mm
 
 	// x_0 = [i; h; 0]
-	x_hat[0][0] = FLOAT_TO_FIXED(i);
-	x_hat[1][0] = FLOAT_TO_FIXED(h);
-	x_hat[2][0] = FLOAT_TO_FIXED(0.0f);
+	// x_hat[0][0] = FLOAT_TO_FIXED(i);
+	// x_hat[1][0] = FLOAT_TO_FIXED(h);
+	// x_hat[2][0] = FLOAT_TO_FIXED(0.0f);
+
+
+  y[0][0] = FLOAT_TO_FIXED(i);
+  y[1][0] = FLOAT_TO_FIXED(h);
+
 	// Implementar el filtro de kalman
 	// MATH
 	// step 1: x_hat = G*x_hat + H*u
@@ -250,9 +266,11 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc){
 	fixed_point_t x_hat_1[3][1];
 	matmul(3, 3, 1, G, x_hat, Gx_hat);
 	// H*u = H_fixed * u_float
-	fixed_point_t H_fixed_u[3][1];
+	fixed_point_t H_fixed_u[3][1] = {0}; // Initialize to zero
 	H_fixed_u[0][0] = fixed_multiply(H_fixed[0][0], FLOAT_TO_FIXED(u_float));
 	H_fixed_u[2][0] = fixed_multiply(H_fixed[0][2], FLOAT_TO_FIXED(u_float));
+
+
   //x_hat_1 = G x + H u
 	vecadd(3, Gx_hat, H_fixed_u, x_hat_1);
 	// step 2: y_hat = Cminus*x_hat
@@ -271,19 +289,10 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc){
 	// Kd = [0.018029293079868  -4.111538385920691  -0.146874468496660]
 	// precomp = -1.662218623972525
 	// step 1: u = -K*x + precomp * h_ref
-	fixed_point_t Kd[1][3] = {
-	{
-	  FLOAT_TO_FIXED(0.0018029293079868),
-	  FLOAT_TO_FIXED(-0.4111538385920691),
-	  FLOAT_TO_FIXED(-0.0146874468496660)
-	}
-	};
-	fixed_point_t h_ref = FLOAT_TO_FIXED(0.025f);
-	fixed_point_t precomp = FLOAT_TO_FIXED(-0.1662218623972525);
-	fixed_point_t u[1][1];
-	matmul(1, 3, 1, Kd, x_hat_result, u);
-	u[0][0] = fixed_multiply(precomp, h_ref);
-	u_float = - 1e3 * fixed_to_float(u[0][0]);
+  // u = -K*x + precomp * h_ref
+  matmul(1, 3, 1, Kd, x_hat_result, u);
+  u[0][0] = -u[0][0] + fixed_multiply(precomp, h_ref);
+  u_float = - 1e3 * fixed_to_float(u[0][0]);
 	// Use x_hat_result_float for further processing
 	// convert u to the range of the PWM
 	// Convert u to the range of the PWM, v_max = 12, v_min = 0
@@ -291,7 +300,8 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc){
 	// duty_cycle = CRR/ARR
 	if(u_float < 0){
 		u_float = 0;
-	}else if(u_float > 12){
+	}else if(u_float > 12)
+  {
 		u_float = 12;
 	}
 		TIM1->CCR1 = (uint32_t)(u_float/12) * 7199; // 12 is max voltage, 7199 is ARR
