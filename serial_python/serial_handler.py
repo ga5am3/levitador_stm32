@@ -23,33 +23,42 @@ class SerialHandler:
         
     def initialize_port(self):
         """Initialize serial port with user selection."""
-        ports = list_ports.comports()
-        port_list = [port.name for port in ports]
-        print(f"Available ports: {port_list}")
-        
-        if len(ports)<1:
+        import sys
+        all_ports = list_ports.comports()
+        # On Windows show only COM*, on Linux only /dev/ttyACM*
+        if sys.platform.startswith("win"):
+            ports = [p for p in all_ports if p.device.upper().startswith("COM")]
+        else:
+            ports = [p for p in all_ports if p.device.startswith("/dev/ttyACM")]
+        if not ports:
+            print("No matching serial ports found.")
+            return False
+
+        print("Available ports:")
+        for idx, p in enumerate(ports):
+            print(f"  {idx}: {p.device} — {p.description}")
+
+        if len(ports) > 1:
+            # multiple → user picks
             while True:
-                print(f"Ports available: {port_list}")
+                choice = input(f"Select a port index (0–{len(ports)-1}): ")
                 try:
-                    choice = int(input(f"elegi un puerto (index de 0 a n):"))
-                    if choice < len(port_list):
-                        self.port = serial.Serial(
-                            port=port_list[choice],
-                            baudrate=BAUDRATE,
-                            timeout=TIMEOUT
-                        )
-                        self.port.flushInput()
-                        self.port.flushOutput()
+                    i = int(choice)
+                    if 0 <= i < len(ports):
+                        sel = ports[i].device
+                        self.port = serial.Serial(sel, baudrate=BAUDRATE, timeout=TIMEOUT)
+                        self.port.reset_input_buffer()
                         return True
-                except (ValueError, IndexError):
-                    print("Invalid selection. Try again.")
-        elif len(ports) == 1:
-            self.port = serial.Serial(
-                port=port_list[0],
-                baudrate=BAUDRATE,
-                timeout=TIMEOUT
-            )
-        else: print("No serial ports available.")
+                except:
+                    pass
+                print("Invalid selection, try again.")
+        else:
+            # exactly one → auto open
+            sel = ports[0].device
+            self.port = serial.Serial(sel, baudrate=BAUDRATE, timeout=TIMEOUT)
+            self.port.reset_input_buffer()
+            return True
+
         return False
         
     def read_data(self):
