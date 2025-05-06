@@ -384,7 +384,11 @@ int main(void)
     // signal_1 = (int)(h*1000);
     // signal_2 = (int)(h_hat*1000);
     HAL_Delay(100);
-    sprintf(data, "%d|%d\n", value, value2);
+    // signal_1 = (int)(h*1000);
+    // signal_2 = (int)(h_hat*1000);
+
+    sprintf(data, "%d|%d\n", (int)(h_hat*10000), (int)(h*10000));
+    // sprintf(data, "%d|%d\n", h_hat, h);
 
     CDC_Transmit_FS(data, strlen(data));
     /* USER CODE BEGIN 3 */

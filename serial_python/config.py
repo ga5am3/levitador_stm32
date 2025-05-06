@@ -25,8 +25,9 @@ PLOT_FIGSIZE = (5, 3)
 PLOT_BGCOLOR = '#333333'
 SIGNAL_COLOR = '#ff9900'
 REFERENCE_COLOR = '#ff2900'
-Y_AXIS_LIMITS = (-10, 60)
+Y_AXIS_LIMITS = (-10, 1700)
 X_AXIS_WINDOW = 15  # seconds
+FACTOR = 1.0  # Scale factor for the signal
 
 # Control Settings
 REFERENCE_MIN = 0.0
