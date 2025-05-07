@@ -165,9 +165,9 @@ fixed_point_t Cminus[2][3] = {
     {0, -1 << FRACTIONAL_BITS, 0}};
 
 fixed_point_t Kkalman[3][2] = {
-    {FLOAT_TO_FIXED(0.65692f), FLOAT_TO_FIXED(-0.437944f)},
-    {FLOAT_TO_FIXED(-0.34308f), FLOAT_TO_FIXED(0.562056f)},
-    {FLOAT_TO_FIXED(-0.0278381f), FLOAT_TO_FIXED(0.0447253f)}};
+  {FLOAT_TO_FIXED(0.999881277876667f), FLOAT_TO_FIXED(-0.992773017041701f)},
+  {FLOAT_TO_FIXED(-0.000118722123333f), FLOAT_TO_FIXED(0.007226982958299f)},
+  {FLOAT_TO_FIXED(-0.002362645445556f), FLOAT_TO_FIXED(0.156316994328178f)}};
 // Taking the action into account
 fixed_point_t H_fixed[1][3] = {
     {FLOAT_TO_FIXED(0.003106f),
@@ -234,18 +234,23 @@ fixed_point_t u[1][1];
 
 float i;
 float u_float = 5.8;
-float h; // Declare the variable h
+float h; // Declare the variable 
+initialized = 0;
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
 
   i = HAL_ADC_GetValue(&hadc1) * 0.0023157 - 4.785;
   h = ((h_prom) * 0.0272065 - 63.235847) * 0.001; // valor en mm
 
-  // x_0 = [i; h; 0]
-  // x_hat[0][0] = FLOAT_TO_FIXED(i);
-  // x_hat[1][0] = FLOAT_TO_FIXED(h);
-  // x_hat[2][0] = FLOAT_TO_FIXED(0.0f);
-
+  if (initialized == 0)
+  {
+    // Initialize x_hat with the first measurement
+    x_hat[0][0] = FLOAT_TO_FIXED(i);
+    x_hat[1][0] = FLOAT_TO_FIXED(h);
+    x_hat[2][0] = FLOAT_TO_FIXED(0.0f);
+    initialized = 1;
+  }
+  
   y[0][0] = FLOAT_TO_FIXED(i);
   y[1][0] = FLOAT_TO_FIXED(h);
 
@@ -260,59 +265,60 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
   // step 1: x_hat = G*x_hat + H*u
   fixed_point_t Gx_hat[3][1];
   fixed_point_t x_hat_1[3][1];
-  matmul(3, 3, 1, G, x_hat, Gx_hat);
-  // H*u = H_fixed * u_float
-  fixed_point_t H_fixed_u[3][1] = {0}; // Initialize to zero
-  H_fixed_u[0][0] = fixed_multiply(H_fixed[0][0], FLOAT_TO_FIXED(u_float));
-  H_fixed_u[2][0] = fixed_multiply(H_fixed[0][2], FLOAT_TO_FIXED(u_float));
+  matmul(3, 3, 1, G, x_hat, x_hat_1);//Gx_hat); // G*x_hat
 
-  // x_hat_1 = G x + H u
-  vecadd(3, Gx_hat, H_fixed_u, x_hat_1);
+  // fixed_point_t H_fixed_u[3][1] = {0}; // Initialize to zero
+  // H_fixed_u[0][0] = fixed_multiply(H_fixed[0][0], FLOAT_TO_FIXED(u_float));
+  // H_fixed_u[2][0] = fixed_multiply(H_fixed[0][2], FLOAT_TO_FIXED(u_float));
+  // vecadd(3, Gx_hat, H_fixed_u, x_hat_1); // G x_hat + H_u
+
   // step 2: y_hat = Cminus*x_hat
-  // fixed_point_t y_hat_negative[2][1];
-  matmul(2, 3, 1, Cminus, x_hat_1, y_hat_negative);
+  fixed_point_t y_hat_negative[2][1];
+  matmul(2, 3, 1, Cminus, x_hat_1, y_hat_negative); // - C x_hat
   // step 3: z_hat = y + y_hat_negative
-  vecadd(2, y, y_hat_negative, z_hat);
+  vecadd(2, y, y_hat_negative, z_hat);  // z = y - y_hat
   // step 4: x_hat = x_hat + K*z_hat
-  matmul(3, 2, 1, Kkalman, z_hat, lz);
-  vecadd(3, x_hat_1, lz, x_hat_result);
+  matmul(3, 2, 1, Kkalman, z_hat, lz); // K z_hat
+  vecadd(3, x_hat_1, lz, x_hat); // x_hat 
   // Save x_hat_result back to x_hat
-  for (int i = 0; i < 3; i++)
-  {
-    x_hat[i][0] = x_hat_result[i][0];
-  }
+
+  // for (int i = 0; i < 3; i++)
+  // {
+  //   x_hat[i][0] = x_hat_result[i][0];
+  // }
+
+  
   // LQR
   // Kd = [0.018029293079868  -4.111538385920691  -0.146874468496660]
   // precomp = -1.662218623972525
   // step 1: u = -K*x + precomp * h_ref
   // u = -K*x + precomp * h_ref
-  matmul(1, 3, 1, Kd, x_hat_result, u);
-  u[0][0] = -u[0][0] + fixed_multiply(precomp, h_ref);
-  u_float = -1e3 * fixed_to_float(u[0][0]);
+  // matmul(1, 3, 1, Kd, x_hat_result, u);
+  // u[0][0] = -u[0][0] + fixed_multiply(precomp, h_ref);
+  // u_float = -1e3 * fixed_to_float(u[0][0]);
   // Use x_hat_result_float for further processing
   // convert u to the range of the PWM
   // Convert u to the range of the PWM, v_max = 12, v_min = 0
   // ARR = 7199
   // duty_cycle = CRR/ARR
-  if (u_float < 0)
-  {
-    u_float = 0;
-  }
-  else if (u_float > 12)
-  {
-    u_float = 12;
-  }
-  TIM1->CCR1 = (uint32_t)((u_float / 12.0f) * 7199);
+  // if (u_float < 0)
+  // {
+  //   u_float = 0;
+  // }
+  // else if (u_float > 12)
+  // {
+  //   u_float = 12;
+  // }
+  // TIM1->CCR1 = (uint32_t)((u_float / 12.0f) * 7199);
   captura = 0;
 }
-
-float h_hat;
 
 static int direction = 1;
 static int value = 0;
 int value2 = 100;
 int signal_1;
 int signal_2;
+float h_hat_float;
 /* USER CODE END 0 */
 
 /**
@@ -364,7 +370,7 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-    h_hat = fixed_to_float(x_hat_result[1][0]);
+    h_hat_float = fixed_to_float(x_hat[1][0]);
     //    sprintf(data, "%d %d %d",h_prom, (int)(10000*h), (int)(10000*h_hat)); // Test position and kalman
     //	CDC_Transmit_FS(data,strlen(data));
     //	HAL_Delay(100);
@@ -387,7 +393,7 @@ int main(void)
     // signal_1 = (int)(h*1000);
     // signal_2 = (int)(h_hat*1000);
 
-    sprintf(data, "%d|%d\n", (int)(h_hat*10000), (int)(h*10000));
+    sprintf(data, "%d|%d\n", (int)(h_hat_float*10000), (int)(h*10000));
     // sprintf(data, "%d|%d\n", h_hat, h);
 
     CDC_Transmit_FS(data, strlen(data));

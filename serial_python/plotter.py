@@ -2,7 +2,7 @@
 """Module for handling plot creation and updates."""
 import numpy as np
 from matplotlib.figure import Figure
-from config import PLOT_FIGSIZE, PLOT_BGCOLOR, SIGNAL_COLOR, REFERENCE_COLOR, Y_AXIS_LIMITS, X_AXIS_WINDOW, DEFAULT_REFERENCE
+from config import PLOT_FIGSIZE, PLOT_BGCOLOR, SIGNAL_COLOR, REFERENCE_COLOR, Y_AXIS_LIMITS, X_AXIS_WINDOW, DEFAULT_REFERENCE, FACTOR
 
 class Plotter:
     """A class used to represent a Plotter for real-time data visualization. Attributes
@@ -78,9 +78,9 @@ class Plotter:
 
         new_x = self.x_data[-1] + 0.1
         self.x_data.append(new_x)
-        self.y_data.append(y_values[0])
+        self.y_data.append(y_values[0] / FACTOR)
         if len(y_values) > 1:
-            self.y_data2.append(y_values[1])
+            self.y_data2.append(y_values[1]/ FACTOR)
         # Update plot lines
         self.line1.set_data(self.x_data, self.y_data)
         self.line3.set_data(self.x_data, self.y_data2)
