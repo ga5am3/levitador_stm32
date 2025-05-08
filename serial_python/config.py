@@ -14,7 +14,7 @@ except:
 APP_TITLE = "Plot Example"
 WINDOW_SIZE = "800x450"
 THEME = "darkly"
-PLOT_UPDATE_INTERVAL = 10  # milliseconds
+PLOT_UPDATE_INTERVAL = 100  # milliseconds
 
 # Serial Communication Settings
 BAUDRATE = 9600
@@ -36,6 +36,6 @@ DEFAULT_REFERENCE = 1.0
 PLOT_OPTIONS = [1.0, 2.0, 3.0]
 
 # Animation Settings
-ANIMATION_INTERVAL = 10  # milliseconds
+ANIMATION_INTERVAL = 100  # milliseconds
 ANIMATION_SAVE_COUNT = 100  # Maximum number of frames to cache
 ANIMATION_CACHE_FRAMES = False  # Disable frame caching to prevent memory issues

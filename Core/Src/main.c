@@ -196,7 +196,7 @@ fixed_point_t lz[3][1];
 fixed_point_t x_hat_result[3][1];
 
 // Variables Fisicas
-int h_prom = 35;
+int h_prom = 30;
 
 /// @brief Esta funcion se llama cuando cuando se detecta un flanco asendente en el
 /// pin de señal de sensado de la camara.
@@ -242,16 +242,16 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
   i = HAL_ADC_GetValue(&hadc1) * 0.0023157 - 4.785;
   h = ((h_prom) * 0.0272065 - 63.235847) * 0.001; // valor en mm
 
-  if (initialized == 0)
-  {
-    // Initialize x_hat with the first measurement
-    x_hat[0][0] = FLOAT_TO_FIXED(i);
-    x_hat[1][0] = FLOAT_TO_FIXED(h);
-    x_hat[2][0] = FLOAT_TO_FIXED(0.0f);
-    initialized = 1;
-  }
+  // if (initialized == 0)
+  // {
+  //   // Initialize x_hat with the first measurement
+  //   x_hat[0][0] = FLOAT_TO_FIXED(1.09);
+  //   x_hat[1][0] = FLOAT_TO_FIXED(h);
+  //   x_hat[2][0] = FLOAT_TO_FIXED(0.0f);
+  //   initialized = 1;
+  // }
   
-  y[0][0] = FLOAT_TO_FIXED(i);
+  y[0][0] = FLOAT_TO_FIXED(1.09);//FLOAT_TO_FIXED(i);
   y[1][0] = FLOAT_TO_FIXED(h);
 
   // Implementar el filtro de kalman
@@ -375,7 +375,7 @@ int main(void)
     //	CDC_Transmit_FS(data,strlen(data));
     //	HAL_Delay(100);
     // sprintf(data, "%d\n", h_prom);
-    value += direction;
+   /*  value += direction;
     value2 -= direction;
     if (value > 100)
     {
@@ -386,7 +386,7 @@ int main(void)
     {
       value = 0;     // Constrain to min value
       direction = 1; // Change direction
-    }
+     */}
     // signal_1 = (int)(h*1000);
     // signal_2 = (int)(h_hat*1000);
     HAL_Delay(100);
