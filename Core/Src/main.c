@@ -170,9 +170,9 @@ fixed_point_t Kkalman[3][2] = {
   {FLOAT_TO_FIXED(-0.002362645445556f), FLOAT_TO_FIXED(0.156316994328178f)}};
 // Taking the action into account
 fixed_point_t H_fixed[1][3] = {
-    {FLOAT_TO_FIXED(0.003106f),
+    {FLOAT_TO_FIXED(0.00310651f),
      FLOAT_TO_FIXED(0.0f),
-     FLOAT_TO_FIXED(0.000003f)}
+     FLOAT_TO_FIXED(-0.00000199370331f)}
     // ,{
     //     FLOAT_TO_FIXED(0.0015578f),
     //     FLOAT_TO_FIXED(0.0f),
@@ -196,8 +196,8 @@ fixed_point_t lz[3][1];
 fixed_point_t x_hat_result[3][1];
 
 // Variables Fisicas
-int h_prom = 30;
-
+// int h_prom = 30;
+uint32_t h_prom = 2900;
 /// @brief Esta funcion se llama cuando cuando se detecta un flanco asendente en el
 /// pin de señal de sensado de la camara.
 /// Cuando se ejecuta, se actualiza el valor de h_prom con el valor de la señal, y
@@ -214,6 +214,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
     if (h_prom > 2900)
     {
       h_prom = h_prom;
+
     }
     else
     {
@@ -234,83 +235,127 @@ fixed_point_t u[1][1];
 
 float i;
 float u_float = 5.8;
-float h; // Declare the variable 
+volatile float h; // Declare the variable 
 initialized = 0;
+float h_hat_float= 0.025;
+float i_hat_float;
+float v_hat_float;
+float u_raw;
+float h_error_int;
+
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
-
-  i = HAL_ADC_GetValue(&hadc1) * 0.0023157 - 4.785;
-  h = ((h_prom) * 0.0272065 - 63.235847) * 0.001; // valor en mm
-
-  // if (initialized == 0)
-  // {
-  //   // Initialize x_hat with the first measurement
-  //   x_hat[0][0] = FLOAT_TO_FIXED(1.09);
-  //   x_hat[1][0] = FLOAT_TO_FIXED(h);
-  //   x_hat[2][0] = FLOAT_TO_FIXED(0.0f);
-  //   initialized = 1;
-  // }
+  if (captura == 1)
+  {
+    i = HAL_ADC_GetValue(&hadc1) * 0.0023157 - 4.785;
+    h = ((h_prom) * 0.0272065 - 63.235847) * 0.001;
+    // h = ((h_prom) * 0.0272065 - 63.235847) * 0.001; // valor en mm
   
-  y[0][0] = FLOAT_TO_FIXED(1.09);//FLOAT_TO_FIXED(i);
-  y[1][0] = FLOAT_TO_FIXED(h);
-
-  // Implementar el filtro de kalman
-  // MATH
-  // step 1: x_hat = G*x_hat + H*u
-  // step 2: y_hat = C*x_hat
-  // step 3: z_hat = y - y_hat
-  // step 4: x_hat = x_hat + K*z_hat
-
-  // Perform calculations
-  // step 1: x_hat = G*x_hat + H*u
-  fixed_point_t Gx_hat[3][1];
-  fixed_point_t x_hat_1[3][1];
-  matmul(3, 3, 1, G, x_hat, x_hat_1);//Gx_hat); // G*x_hat
-
-  // fixed_point_t H_fixed_u[3][1] = {0}; // Initialize to zero
-  // H_fixed_u[0][0] = fixed_multiply(H_fixed[0][0], FLOAT_TO_FIXED(u_float));
-  // H_fixed_u[2][0] = fixed_multiply(H_fixed[0][2], FLOAT_TO_FIXED(u_float));
-  // vecadd(3, Gx_hat, H_fixed_u, x_hat_1); // G x_hat + H_u
-
-  // step 2: y_hat = Cminus*x_hat
-  fixed_point_t y_hat_negative[2][1];
-  matmul(2, 3, 1, Cminus, x_hat_1, y_hat_negative); // - C x_hat
-  // step 3: z_hat = y + y_hat_negative
-  vecadd(2, y, y_hat_negative, z_hat);  // z = y - y_hat
-  // step 4: x_hat = x_hat + K*z_hat
-  matmul(3, 2, 1, Kkalman, z_hat, lz); // K z_hat
-  vecadd(3, x_hat_1, lz, x_hat); // x_hat 
-  // Save x_hat_result back to x_hat
-
-  // for (int i = 0; i < 3; i++)
-  // {
-  //   x_hat[i][0] = x_hat_result[i][0];
-  // }
-
+    // if (isnan(h)){
+    //   h = h_hat_float;
+    // }
+    if (isnan(h) || h < 0.0f || h > 0.15f) {  // Assuming sensor can't be outside 0–100mm
+      h = h_hat_float;
+    }
   
-  // LQR
-  // Kd = [0.018029293079868  -4.111538385920691  -0.146874468496660]
-  // precomp = -1.662218623972525
-  // step 1: u = -K*x + precomp * h_ref
-  // u = -K*x + precomp * h_ref
-  // matmul(1, 3, 1, Kd, x_hat_result, u);
-  // u[0][0] = -u[0][0] + fixed_multiply(precomp, h_ref);
-  // u_float = -1e3 * fixed_to_float(u[0][0]);
-  // Use x_hat_result_float for further processing
-  // convert u to the range of the PWM
-  // Convert u to the range of the PWM, v_max = 12, v_min = 0
-  // ARR = 7199
-  // duty_cycle = CRR/ARR
-  // if (u_float < 0)
-  // {
-  //   u_float = 0;
-  // }
-  // else if (u_float > 12)
-  // {
-  //   u_float = 12;
-  // }
-  // TIM1->CCR1 = (uint32_t)((u_float / 12.0f) * 7199);
-  captura = 0;
+    if (initialized == 0)
+    {
+      // Initialize x_hat with the first measurement
+      x_hat[0][0] = FLOAT_TO_FIXED(1.09287f);
+      x_hat[1][0] = FLOAT_TO_FIXED(h);
+      x_hat[2][0] = FLOAT_TO_FIXED(0.0f);
+      initialized = 1;
+    }
+    
+    y[0][0] = FLOAT_TO_FIXED(1.09287f);//FLOAT_TO_FIXED(i);
+    y[1][0] = FLOAT_TO_FIXED(h);
+  
+    // Implementar el filtro de kalman
+    // MATH
+    // step 1: x_hat = G*x_hat + H*u
+    // step 2: y_hat = C*x_hat
+    // step 3: z_hat = y - y_hat
+    // step 4: x_hat = x_hat + K*z_hat
+  
+    // Perform calculations
+    // step 1: x_hat = G*x_hat + H*u
+    fixed_point_t Gx_hat[3][1];
+    fixed_point_t x_hat_1[3][1];
+    matmul(3, 3, 1, G, x_hat, x_hat_1);//Gx_hat); // G*x_hat
+    
+    // fixed_point_t H_fixed_u[3][1] = {0}; // Initialize to zero
+    // H_fixed_u[0][0] = fixed_multiply(H_fixed[0][0], FLOAT_TO_FIXED(u_float));
+    // H_fixed_u[2][0] = fixed_multiply(H_fixed[0][2], FLOAT_TO_FIXED(u_float));
+    // vecadd(3, Gx_hat, H_fixed_u, x_hat_1); // G x_hat + H_u
+  
+    // step 2: y_hat = Cminus*x_hat
+    fixed_point_t y_hat_negative[2][1];
+    matmul(2, 3, 1, Cminus, x_hat_1, y_hat_negative); // - C x_hat
+    // step 3: z_hat = y + y_hat_negative
+    vecadd(2, y, y_hat_negative, z_hat);  // z = y - y_hat
+    // step 4: x_hat = x_hat + K*z_hat
+    matmul(3, 2, 1, Kkalman, z_hat, lz); // K z_hat
+    vecadd(3, x_hat_1, lz, x_hat); // x_hat 
+    // Save x_hat_result back to x_hat
+  
+    // for (int i = 0; i < 3; i++)
+    // {
+    //   x_hat[i][0] = x_hat_result[i][0];
+    // }
+  
+    
+    // LQR
+    // Kd = [0.018029293079868  -4.111538385920691  -0.146874468496660]
+    // precomp = -1.662218623972525
+    // step 1: u = -K*x + precomp * h_ref
+    // u = -K*x + precomp * h_ref
+    // --- Integral error update ---
+    float dt = 0.0001f; // 1/10000
+    float h_ref_f = 0.025f;
+    float K_I = 5.0f; // Tune as needed
+    h_error_int += (h_ref_f - h) * dt;
+
+
+    matmul(3, 1, 1, Kd, x_hat, u);
+    i_hat_float = fixed_to_float(x_hat[0][0]);
+    h_hat_float = fixed_to_float(x_hat[1][0]);
+    v_hat_float = fixed_to_float(x_hat[2][0]);
+    u_raw =   -(1.6487*i_hat_float - 404.5477 *h_hat_float -15.8301*v_hat_float - 0.1662218623972525 * 0.030);
+    // float u_int = K_I * h_error_int;
+    // if (u_int < -2)
+    // {
+    //   u_int = -2;
+    // }
+    // else if (u_int > 2)
+    // {
+    //   u_int = 2;
+    // }
+
+    // u_raw += u_int;
+    //u_raw = -(1.5276*i_hat_float -399.2845*h_hat_float  -16.8755*v_hat_float + 166.390041 * 0.035);
+    
+    // u[0][0] = -u[0][0] + precomp * h_ref;
+    //u_float = -1e3 * fixed_to_float(u[0][0]);
+    
+    // Use x_hat_result_float for further processing
+    // convert u to the range of the PWM
+    // Convert u to the range of the PWM, v_max = 12, v_min = 0
+    // ARR = 7199
+    // duty_cycle = CRR/ARR;
+    if (u_raw < 0)
+    {
+      u_float = 0;
+    }
+    else if (u_raw > 12)
+    {
+      u_float = 12;
+    }
+    else{
+      u_float = u_raw;
+    }
+    TIM1->CCR1 = (uint32_t)((u_float / 12.0f) * 7199);
+    captura = 0; 
+  }
 }
 
 static int direction = 1;
@@ -318,13 +363,13 @@ static int value = 0;
 int value2 = 100;
 int signal_1;
 int signal_2;
-float h_hat_float;
+
 /* USER CODE END 0 */
 
 /**
- * @brief  The application entry point.
- * @retval int
- */
+  * @brief  The application entry point.
+  * @retval int
+  */
 int main(void)
 {
 
@@ -370,32 +415,11 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-    h_hat_float = fixed_to_float(x_hat[1][0]);
-    //    sprintf(data, "%d %d %d",h_prom, (int)(10000*h), (int)(10000*h_hat)); // Test position and kalman
-    //	CDC_Transmit_FS(data,strlen(data));
-    //	HAL_Delay(100);
-    // sprintf(data, "%d\n", h_prom);
-   /*  value += direction;
-    value2 -= direction;
-    if (value > 100)
-    {
-      value = 100;    // Constrain to max value
-      direction = -1; // Change direction
-    }
-    else if (value < 0)
-    {
-      value = 0;     // Constrain to min value
-      direction = 1; // Change direction
-     */}
-    // signal_1 = (int)(h*1000);
-    // signal_2 = (int)(h_hat*1000);
     HAL_Delay(100);
     // signal_1 = (int)(h*1000);
     // signal_2 = (int)(h_hat*1000);
 
     sprintf(data, "%d|%d\n", (int)(h_hat_float*10000), (int)(h*10000));
-    // sprintf(data, "%d|%d\n", h_hat, h);
-
     CDC_Transmit_FS(data, strlen(data));
     /* USER CODE BEGIN 3 */
   }
@@ -403,9 +427,9 @@ int main(void)
 }
 
 /**
- * @brief System Clock Configuration
- * @retval None
- */
+  * @brief System Clock Configuration
+  * @retval None
+  */
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
@@ -413,8 +437,8 @@ void SystemClock_Config(void)
   RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
   /** Initializes the RCC Oscillators according to the specified parameters
-   * in the RCC_OscInitTypeDef structure.
-   */
+  * in the RCC_OscInitTypeDef structure.
+  */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
@@ -428,8 +452,9 @@ void SystemClock_Config(void)
   }
 
   /** Initializes the CPU, AHB and APB buses clocks
-   */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                                |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
@@ -439,7 +464,7 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC | RCC_PERIPHCLK_USB;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC|RCC_PERIPHCLK_USB;
   PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV6;
   PeriphClkInit.UsbClockSelection = RCC_USBCLKSOURCE_PLL_DIV1_5;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
@@ -449,10 +474,10 @@ void SystemClock_Config(void)
 }
 
 /**
- * @brief ADC1 Initialization Function
- * @param None
- * @retval None
- */
+  * @brief ADC1 Initialization Function
+  * @param None
+  * @retval None
+  */
 static void MX_ADC1_Init(void)
 {
 
@@ -467,7 +492,7 @@ static void MX_ADC1_Init(void)
   /* USER CODE END ADC1_Init 1 */
 
   /** Common config
-   */
+  */
   hadc1.Instance = ADC1;
   hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
   hadc1.Init.ContinuousConvMode = DISABLE;
@@ -481,7 +506,7 @@ static void MX_ADC1_Init(void)
   }
 
   /** Configure Regular Channel
-   */
+  */
   sConfig.Channel = ADC_CHANNEL_0;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
@@ -492,13 +517,14 @@ static void MX_ADC1_Init(void)
   /* USER CODE BEGIN ADC1_Init 2 */
 
   /* USER CODE END ADC1_Init 2 */
+
 }
 
 /**
- * @brief TIM1 Initialization Function
- * @param None
- * @retval None
- */
+  * @brief TIM1 Initialization Function
+  * @param None
+  * @retval None
+  */
 static void MX_TIM1_Init(void)
 {
 
@@ -532,7 +558,7 @@ static void MX_TIM1_Init(void)
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
   sConfigOC.Pulse = 3600;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_LOW;
   sConfigOC.OCNPolarity = TIM_OCNPOLARITY_LOW;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
@@ -544,7 +570,7 @@ static void MX_TIM1_Init(void)
   sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
   sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
   sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
-  sBreakDeadTimeConfig.DeadTime = 36;
+  sBreakDeadTimeConfig.DeadTime = 40;
   sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
   sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
   sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
@@ -556,13 +582,14 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 2 */
   HAL_TIM_MspPostInit(&htim1);
+
 }
 
 /**
- * @brief TIM2 Initialization Function
- * @param None
- * @retval None
- */
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
 static void MX_TIM2_Init(void)
 {
 
@@ -604,13 +631,14 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 2 */
   HAL_TIM_MspPostInit(&htim2);
+
 }
 
 /**
- * @brief TIM3 Initialization Function
- * @param None
- * @retval None
- */
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
 static void MX_TIM3_Init(void)
 {
 
@@ -628,7 +656,7 @@ static void MX_TIM3_Init(void)
   htim3.Instance = TIM3;
   htim3.Init.Prescaler = 0;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 7199;
+  htim3.Init.Period = 14499;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_IC_Init(&htim3) != HAL_OK)
@@ -665,18 +693,19 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 2 */
   HAL_TIM_MspPostInit(&htim3);
+
 }
 
 /**
- * @brief GPIO Initialization Function
- * @param None
- * @retval None
- */
+  * @brief GPIO Initialization Function
+  * @param None
+  * @retval None
+  */
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-  /* USER CODE BEGIN MX_GPIO_Init_1 */
-  /* USER CODE END MX_GPIO_Init_1 */
+/* USER CODE BEGIN MX_GPIO_Init_1 */
+/* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
@@ -687,6 +716,9 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
 
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_RESET);
+
   /*Configure GPIO pin : PC13 */
   GPIO_InitStruct.Pin = GPIO_PIN_13;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -694,8 +726,15 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /* USER CODE BEGIN MX_GPIO_Init_2 */
-  /* USER CODE END MX_GPIO_Init_2 */
+  /*Configure GPIO pin : PB10 */
+  GPIO_InitStruct.Pin = GPIO_PIN_10;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+/* USER CODE BEGIN MX_GPIO_Init_2 */
+/* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
@@ -703,9 +742,9 @@ static void MX_GPIO_Init(void)
 /* USER CODE END 4 */
 
 /**
- * @brief  This function is executed in case of error occurrence.
- * @retval None
- */
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
@@ -717,14 +756,14 @@ void Error_Handler(void)
   /* USER CODE END Error_Handler_Debug */
 }
 
-#ifdef USE_FULL_ASSERT
+#ifdef  USE_FULL_ASSERT
 /**
- * @brief  Reports the name of the source file and the source line number
- *         where the assert_param error has occurred.
- * @param  file: pointer to the source file name
- * @param  line: assert_param error line source number
- * @retval None
- */
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
