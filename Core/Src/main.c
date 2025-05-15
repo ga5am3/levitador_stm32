@@ -70,8 +70,8 @@ static void MX_TIM3_Init(void);
 /* USER CODE BEGIN 0 */
 
 #define WORD_LENGHT 32
-#define INTEGER_BITS 10
-#define FRACTIONAL_BITS 22
+#define INTEGER_BITS 6
+#define FRACTIONAL_BITS 26
 
 typedef int32_t fixed_point_t;
 #define FLOAT_TO_FIXED(x) ((fixed_point_t)((x) * (1 << FRACTIONAL_BITS)))
@@ -149,15 +149,16 @@ fixed_point_t G[3][3] = {
     {FLOAT_TO_FIXED(0.988195229545670f),
      FLOAT_TO_FIXED(0.0f),
      FLOAT_TO_FIXED(0.0f)},
-    {FLOAT_TO_FIXED(-0.000000089317925f),
-     FLOAT_TO_FIXED(1.000000980000160f),
-     FLOAT_TO_FIXED(0.000100000130667f)},
-    {FLOAT_TO_FIXED(-0.001782831162435f),
-     FLOAT_TO_FIXED(0.078400102442707f),
-     FLOAT_TO_FIXED(1.000003920002561f)}};
+    {FLOAT_TO_FIXED(-0.000000061477779f),
+     FLOAT_TO_FIXED(1.000002800001307f),
+     FLOAT_TO_FIXED(0.000100000093333f)},
+    {FLOAT_TO_FIXED(-0.001227127465612f),
+     FLOAT_TO_FIXED(0.056000052266681f),
+     FLOAT_TO_FIXED(1.000002800001307f)}};
+
 fixed_point_t x_hat[3][1] = {
     {FLOAT_TO_FIXED(1.09287f)},
-    {FLOAT_TO_FIXED(0.025f)},
+    {FLOAT_TO_FIXED(0.035f)},
     {FLOAT_TO_FIXED(0.0f)}};
 
 fixed_point_t Cminus[2][3] = {
@@ -165,14 +166,15 @@ fixed_point_t Cminus[2][3] = {
     {0, -1 << FRACTIONAL_BITS, 0}};
 
 fixed_point_t Kkalman[3][2] = {
-  {FLOAT_TO_FIXED(0.999881277876667f), FLOAT_TO_FIXED(-0.992773017041701f)},
-  {FLOAT_TO_FIXED(-0.000118722123333f), FLOAT_TO_FIXED(0.007226982958299f)},
-  {FLOAT_TO_FIXED(-0.002362645445556f), FLOAT_TO_FIXED(0.156316994328178f)}};
+  {FLOAT_TO_FIXED(0.999892934165581f), FLOAT_TO_FIXED(-0.993413813308360f)},
+  {FLOAT_TO_FIXED(-0.000107065834419), FLOAT_TO_FIXED(0.006586186691640f)},
+  {FLOAT_TO_FIXED(-0.001670662992121), FLOAT_TO_FIXED(0.112630884108006f)}};
+
 // Taking the action into account
 fixed_point_t H_fixed[1][3] = {
-    {FLOAT_TO_FIXED(0.00310651f),
+    {FLOAT_TO_FIXED(0.003106f),
      FLOAT_TO_FIXED(0.0f),
-     FLOAT_TO_FIXED(-0.00000199370331f)}
+     FLOAT_TO_FIXED(-0.000001921180583f)}
     // ,{
     //     FLOAT_TO_FIXED(0.0015578f),
     //     FLOAT_TO_FIXED(0.0f),
@@ -229,19 +231,35 @@ fixed_point_t Kd[1][3] = {
     {FLOAT_TO_FIXED(0.0018029293079868),
      FLOAT_TO_FIXED(-0.4111538385920691),
      FLOAT_TO_FIXED(-0.0146874468496660)}};
-fixed_point_t h_ref = FLOAT_TO_FIXED(0.025f);
+fixed_point_t h_ref = FLOAT_TO_FIXED(0.035f);
 fixed_point_t precomp = FLOAT_TO_FIXED(-0.1662218623972525);
 fixed_point_t u[1][1];
 
 float i;
 float u_float = 5.8;
-volatile float h; // Declare the variable 
+volatile float h = 0.035; // Declare the variable 
 initialized = 0;
-float h_hat_float= 0.025;
+float h_hat_float= 0.035;
 float i_hat_float;
 float v_hat_float;
 float u_raw;
 float h_error_int;
+
+// DOB parameters (adjust as needed)
+#define DT        0.0001f   // Sampling time
+#define Gg         9.81f     // Gravity
+#define M         0.042f    // Mass (kg)
+#define K_NOM     0.0004f   // Nominal k value
+#define ALPHA     0.02f     // Smoothing factor
+
+// Persistent variables (should be static or global)
+static float d_prev = 0.0f;
+static float v_prev = 0.0f;
+static float i_prev = 0.0f;
+static float h_prev = 0.0f;
+static const float K_OVER2M = K_NOM / (2.0f * M);
+static const int K_dist= 13000;
+
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
@@ -281,12 +299,12 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
     // step 1: x_hat = G*x_hat + H*u
     fixed_point_t Gx_hat[3][1];
     fixed_point_t x_hat_1[3][1];
-    matmul(3, 3, 1, G, x_hat, x_hat_1);//Gx_hat); // G*x_hat
-    
-    // fixed_point_t H_fixed_u[3][1] = {0}; // Initialize to zero
-    // H_fixed_u[0][0] = fixed_multiply(H_fixed[0][0], FLOAT_TO_FIXED(u_float));
-    // H_fixed_u[2][0] = fixed_multiply(H_fixed[0][2], FLOAT_TO_FIXED(u_float));
-    // vecadd(3, Gx_hat, H_fixed_u, x_hat_1); // G x_hat + H_u
+    matmul(3, 3, 1, G, x_hat, Gx_hat);//Gx_hat); // G*x_hat
+  
+    fixed_point_t H_fixed_u[3][1] = {0}; // Initialize to zero
+    H_fixed_u[0][0] = fixed_multiply(H_fixed[0][0], FLOAT_TO_FIXED(u_float));
+    H_fixed_u[2][0] = fixed_multiply(H_fixed[0][2], FLOAT_TO_FIXED(u_float));
+    vecadd(3, Gx_hat, H_fixed_u, x_hat_1); // G x_hat + H_u
   
     // step 2: y_hat = Cminus*x_hat
     fixed_point_t y_hat_negative[2][1];
@@ -303,35 +321,64 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
     //   x_hat[i][0] = x_hat_result[i][0];
     // }
   
-    
     // LQR
     // Kd = [0.018029293079868  -4.111538385920691  -0.146874468496660]
     // precomp = -1.662218623972525
     // step 1: u = -K*x + precomp * h_ref
     // u = -K*x + precomp * h_ref
+    // 
+
+
+
     // --- Integral error update ---
     float dt = 0.0001f; // 1/10000
-    float h_ref_f = 0.025f;
-    float K_I = 5.0f; // Tune as needed
+    float h_ref_f = 0.04f;
+    float K_I = 1.0f; // Tune as needed
     h_error_int += (h_ref_f - h) * dt;
-
 
     matmul(3, 1, 1, Kd, x_hat, u);
     i_hat_float = fixed_to_float(x_hat[0][0]);
     h_hat_float = fixed_to_float(x_hat[1][0]);
     v_hat_float = fixed_to_float(x_hat[2][0]);
-    u_raw =   -(1.6487*i_hat_float - 404.5477 *h_hat_float -15.8301*v_hat_float - 0.1662218623972525 * 0.030);
-    // float u_int = K_I * h_error_int;
-    // if (u_int < -2)
-    // {
-    //   u_int = -2;
-    // }
-    // else if (u_int > 2)
-    // {
-    //   u_int = 2;
-    // }
+    u_raw =   -(1.6728493*i_hat_float - -420.629612 *h_hat_float - 19.55126*v_hat_float - 172.3527895 * h_ref_f);
+    float u_int = K_I * h_error_int;
+    
+    if (u_int < -1){
+      u_int = -1;
+    }
+    else if (u_int > 1) {
+      u_int = 1;
+    }
 
-    // u_raw += u_int;
+    
+
+    // DOB
+    float i_now = i_hat_float;
+    float h_now = h_hat_float;
+    float v_now = v_hat_float;
+    
+    float h2 = h_prev * h_prev;
+
+    if (h2 < 1e-6f)
+    {
+      h2 = 1e-8f;
+    }
+
+    float model_accel = Gg - (K_OVER2M)*(i_prev*i_prev) / h2;
+    float v_pred = v_prev + model_accel * DT;
+    float d_raw = v_now - v_pred;
+    float d_omega_hat = (1.0f- ALPHA) * d_prev + ALPHA * d_raw;
+
+    d_prev = d_omega_hat;
+    v_prev = v_now;
+    i_prev = i_now;
+    h_prev = h_now;
+
+    u_raw += u_int;
+    
+    v_prev = v_now;
+    i_prev = i_now;
+    h_prev = h_now;
     //u_raw = -(1.5276*i_hat_float -399.2845*h_hat_float  -16.8755*v_hat_float + 166.390041 * 0.035);
     
     // u[0][0] = -u[0][0] + precomp * h_ref;
@@ -342,6 +389,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
     // Convert u to the range of the PWM, v_max = 12, v_min = 0
     // ARR = 7199
     // duty_cycle = CRR/ARR;
+    u_raw += K_dist * d_omega_hat;
     if (u_raw < 0)
     {
       u_float = 0;
